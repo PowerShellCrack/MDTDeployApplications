@@ -1,0 +1,99 @@
+<job id="Install-Project">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript">
+ 
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-Project.wsf
+' //
+' // Purpose: This will install Microsoft Project 2016
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-Project.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'//
+'// Global constant and variable declarations
+'//
+'//----------------------------------------------------------------------------
+ 
+Option Explicit 
+
+Dim iRetVal 
+'//----------------------------------------------------------------------------
+'// End declarations
+'//----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'// Main routine
+'//----------------------------------------------------------------------------
+ 
+On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sMSP, sXML, sCustomInstall, sMSPPath, sXMLPath
+	
+	
+	'// Variables
+	sVersion = "16.0.4266.1001"
+	sArch = "x86"
+	sFile = "setup.exe"
+	sCustomInstall = "msp" 'choose msp or xml or none
+	sMSP = "FULL_SILENT.MSP"
+	sXML = "FULL_SILENT.xml"
+	sMSPPath = oUtility.ScriptDir & "\configs\" & sMSP
+	sXMLPath = oUtility.ScriptDir & "\configs\" & sXML
+	
+	sInstallName = "Microsoft Project 2016"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	if sCustomInstall = "msp" then
+		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /adminfile """ & sMSPPath & """")
+	Elseif sCustomInstall = "xml" then
+		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /config """ & sXMLPath & """")
+	Else
+		iRetVal = oUtility.RunWithHeartbeat(sInstallerPath)
+	End If
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo  	
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+	
+End Function
+</script>
+</job>
+

@@ -1,0 +1,149 @@
+<job id="Install-AdobeFlashX">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript">
+ 
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-AdobeFlashX.wsf
+' //
+' // Purpose: This will install Adobe Flash ActiveX
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-AdobeFlashX.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'//
+'// Global constant and variable declarations
+'//
+'//----------------------------------------------------------------------------
+ 
+Option Explicit 
+
+Dim iRetVal 
+'//----------------------------------------------------------------------------
+'// End declarations
+'//----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'// Main routine
+'//----------------------------------------------------------------------------
+ 
+On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sType
+	Dim arySplitVer,sMajVer,sMinVer
+	Dim sLogFolder,sLogName,sLogPath
+
+	'// Variables
+	sVersion = "32.0.0.114"
+	sType = "active_x"
+	sArch = ""
+	
+	arySplitVer = Split(sVersion, ".")
+	sMajVer=arySplitVer(0)
+	sMinVer=arySplitVer(3)
+	
+	sFile = "Install_flash_player_" & sMajVer &"_" & sType & ".msi"
+	
+	sInstallName = "Adobe Flash ActiveX"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sVersion & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogPath
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	Dim strComputer,objWMIService
+	Dim oss,os,sOSVer
+	Dim arySplitOSVer,sOSMajVer,sOSMinVer,sOSShortVer
+	strComputer = "."
+	Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
+	Set oss = objWMIService.ExecQuery ("Select * from Win32_OperatingSystem")
+	
+	For Each os in oss
+	 sOSVer = os.Version
+	Next
+	
+	arySplitOSVer = Split(sOSVer, ".")
+	sOSMajVer=arySplitOSVer(0)
+	sOSMinVer=arySplitOSVer(1)
+	
+	sOSShortVer = (sOSMajVer & "." & sOSMinVer)
+	
+	If sOSShortVer = "10.0" Then
+		iRetVal = 0
+	Else
+		iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
+	End If
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oFSO.CopyFile (oUtility.ScriptDir & "\source\mms.cfg"), ("C:\Windows\system32\Macromed\Flash\mms.cfg"), True
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo  	
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+Function CopyFile(sName,sDestPath)
+	
+	If oFSO.fileexists(oUtility.ScriptDir & "\" & sName) Then
+		If Not oFSO.FolderExists(sDestPath) Then
+			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
+			oFSO.CreateFolder sDestPath
+		End If
+		oLogging.CreateEntry "Preparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
+		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
+		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
+		CopyFile=0
+	Else
+		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
+		CopyFile=2
+	End If
+
+End Function
+
+</script>
+</job>
+
+
+
+

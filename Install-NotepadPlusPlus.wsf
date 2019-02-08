@@ -1,0 +1,144 @@
+<job id="Install-NotepadPlusPlus">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-NotepadPlusPlus.wsf
+' //
+' // Purpose: This will install Notepad++
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-NotepadPlusPlus.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sInstallName,sVersion
+	Dim sFile, sInstallerPath,sArch
+	Dim sFolder
+	
+	
+	'// Variables
+	sVersion = "7.6.3"
+	sArch = "x86"
+	
+	If sArch = "x64" then
+		sFile = "npp." & sVersion & ".Installer.x64.exe"
+		sFolder = "C:\Program Files\Notepad++\plugins\ComparePlugin"
+	Else
+		sFile = "npp." & sVersion & ".Installer.exe"
+		sFolder = "C:\Program Files (x86)\Notepad++\plugins\ComparePlugin"
+	End If
+	
+	sInstallName = "Notepad++"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /S")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+		If Not oFSO.FolderExists(sFolder) Then
+		  oFSO.CreateFolder sFolder
+		  oLogging.CreateEntry "Created folder" & sFolder, LogTypeInfo
+		End If
+		oFSO.CopyFile (oUtility.ScriptDir & "\source\ComparePlugin.dll"), (sFolder & "\ComparePlugin.dll"), True
+		
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+Function CopyFile(sName,sDestPath)
+	If oFSO.FileExists(oUtility.ScriptDir & "\" & sName) Then
+		If Not oFSO.FolderExists(sDestPath) Then
+			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
+			oFSO.CreateFolder sDestPath
+		End If
+		oLogging.CreateEntry "Preparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
+		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
+		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
+		CopyFile=0
+	Else
+		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
+		CopyFile=2
+	End If
+
+End Function
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

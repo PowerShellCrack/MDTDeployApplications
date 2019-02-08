@@ -1,0 +1,131 @@
+<job id="Install-FireFoxNoService">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-FireFoxNoService.wsf
+' //
+' // Purpose: This will install Mozilla Firefox with no Maintenance Service
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-FireFoxNoService.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sServiceInstaller
+	Dim sInstalledPath
+	
+	'// Variables
+	sVersion = "65.0"
+	sArch = "x64"
+	
+	If sArch = "x64" then
+		sFile = "Firefox Setup " & sVersion & " (x64)\Setup.exe"
+	Else
+		sFile = "Firefox Setup " & sVersion & "\Setup.exe"
+	End If
+	
+	If sArch = "x64" then
+		sServiceInstaller = oUtility.ScriptDir & "\Firefox Setup " & sVersion & " (x64)\core\maintenanceservice_installer.exe"
+	Else
+		sServiceInstaller = oUtility.ScriptDir & "\Firefox Setup " & sVersion & "\core\maintenanceservice_installer.exe"
+	End If
+	
+	sInstallName = "Mozilla Firefox"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	'// delete core\maintenanceservice_installer.exe
+	If oFSO.FileExists(sServiceInstaller) Then
+		oFSO.DeleteFile sServiceInstaller
+	end if
+	
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ -ms /INI=""" & oUtility.ScriptDir & "\Configs\firefox.ini""""")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+		sInstalledPath = "C:\Program Files\Mozilla Firefox"
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mozilla.cfg"), (sInstalledPath & "\mozilla.cfg"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\override.ini"), (sInstalledPath & "\browser\override.ini"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\local-settings.js"), (sInstalledPath & "\defaults\pref\local-settings.js"), True
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

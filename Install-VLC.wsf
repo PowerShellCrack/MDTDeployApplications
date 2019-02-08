@@ -1,0 +1,132 @@
+<job id="Install-VLC">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-VLC.wsf
+' //
+' // Purpose: This will install VLC Media Player
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-VLC.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+
+
+	'// Variables
+	sVersion = "3.0.6"
+	sArch = "x64"	
+	
+	If sArch = "x64" then
+		sFile = "vlc-" & sVersion & "-win64.exe"
+	Else
+		sFile = "vlc-" & sVersion & "-win32.exe"
+	End If
+	
+	sInstallName = "VLC Media Player"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /L=1033 /S /NCRC")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo	
+		DeleteFile "C:\Users\Public\Desktop","VLC media player.lnk"
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

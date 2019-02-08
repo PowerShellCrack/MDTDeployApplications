@@ -1,0 +1,98 @@
+<job id="Install-AdminCenter">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript">
+ 
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-AdminCenter.wsf
+' //
+' // Purpose: This will install Windows Admin Center
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-AdminCenter.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'//
+'// Global constant and variable declarations
+'//
+'//----------------------------------------------------------------------------
+ 
+Option Explicit 
+
+Dim iRetVal 
+'//----------------------------------------------------------------------------
+'// End declarations
+'//----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'// Main routine
+'//----------------------------------------------------------------------------
+ 
+On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	
+	'// Variables
+	sVersion = "1809.5"
+	sArch = "x86"	
+	sFile = "WindowsAdminCenter" & sVersion & ".msi"
+	
+	sInstallName = "Windows Admin Center"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogPath
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn CREATE_DESKTOP_SHORTCUT_CLIENT=True SME_PORT=443 SSL_CERTIFICATE_OPTION=generate /L*v """ & sLogPath & """")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo 	
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+</script>
+</job>
+

@@ -1,0 +1,109 @@
+<job id="Install-ChromeSTD">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript">
+ 
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-ChromeSTD.wsf
+' //
+' // Purpose: This will install Google Chrome Standalone Edition
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-ChromeSTD.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'//
+'// Global constant and variable declarations
+'//
+'//----------------------------------------------------------------------------
+ 
+Option Explicit 
+
+Dim iRetVal 
+'//----------------------------------------------------------------------------
+'// End declarations
+'//----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'// Main routine
+'//----------------------------------------------------------------------------
+ 
+On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	
+	'// Variables
+	sVersion = "72.0.3626.81"
+	sArch = "x64"
+
+	If sArch = "x64" then
+		sFile = "ChromeStandaloneSetup64.exe"
+	Else
+		sFile = "ChromeStandaloneSetup.exe"
+	End If
+	
+	sInstallName = "Google Chrome Standard Edition"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sVersion & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogPath
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SSTD_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /silent /install")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo 	
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypSTDrror
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SSTD_MASK_NOZONECHECKS")	
+
+End Function 
+
+</script>
+</job>
+
+
+
+
+
+
+

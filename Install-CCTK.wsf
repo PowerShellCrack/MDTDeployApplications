@@ -1,0 +1,111 @@
+<job id="Install-CCTK">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-CCTK.wsf
+' //
+' // Purpose: This will install Dell Command and Configure Toolkit
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-Command.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+Option Explicit 
+
+Dim iRetVal 
+
+On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+
+	'// Variables
+	sVersion = "4.1.0.478"
+	sArch = "x86"
+	sFile = "Command_Configure.msi"
+	
+	If oEnvironment.Exists("CCTKInstallerVersion") Then
+		sVersion = oEnvironment.Item("CCTKInstallerVersion")
+	End if
+	
+	'Apply Arguments
+	If oUtility.Arguments.Exists("Version") Then
+		sVersion = oUtility.Arguments("Version")
+	End If
+	
+	sInstallName = "Dell Command and Configure Toolkit"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sVersion & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogPath
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn AgreeToLicense=YES RebootYesNo=No /l*v """ & sLogPath & """")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		DeleteFile "C:\Users\Public\Desktop","Dell Command Configure Wizard.lnk"
+		DeleteFile "C:\Users\Public\Desktop","Dell CCTK Configuration Wizard.lnk"
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+</script>
+</job>
+

@@ -1,0 +1,137 @@
+<job id="Install-VirusScan">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-VirusScan.wsf
+' //
+' // Purpose: This will install McAfee Virusscan Enterprise
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-VirusScan.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sFramePkg, sFramePkgPath
+	Dim sSiteXML, sSiteXMLPath
+	Dim sDatPath
+	Dim InstallFiles()
+	Dim i, stemp
+	Dim sPatch
+	Dim sLogFolder,sLogName,sLogPath
+	
+	'// Variables
+	sVersion = "8.8.0"
+	sPatch = "Patch7"
+	sArch = "x86"
+	sFile = "CM-205722-VSE880LMLRP7\setupvse.exe"
+	
+	sFramePkg = "CM-205722-VSE880LMLRP7\FramePkg_UPD.exe"
+	sFramePkgPath = oUtility.ScriptDir & "\source\" & sFramePkg
+	
+	sSiteXML = "SITELIST.XML"
+	sSiteXMLPath = oUtility.ScriptDir & "\xml\" & sSiteXML
+	
+	sInstallName = "McAfee VirusScan"
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogPath
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /s ADDLOCAL=ALL RUNAUTOUPDATE=False ISCHECKFORPRODUCTUPDATES=0 REMOVEINCOMPATIBLESOFTWARE=False /qn /norestart /l*v """ & sLogPath & """")
+
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		'oFSO.CopyFile (oUtility.ScriptDir & "xml\SiteList.xml"), ("C:\Users\Public\Desktop\SiteList.xml"), True
+		'On Error Resume Next
+		'wscript.echo """" & sFramePkgPath & """ /Install=Updater /Silent /SiteInfo=""" & sSiteXMLPath & """"
+		oShell.Run """" & sFramePkgPath & """ /Install=Updater /Silent /SiteInfo=""" & sSiteXMLPath & """", 0, True
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo	
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+Function CopyFile(sName,sDestPath)
+
+	If oFSO.fileexists(oUtility.ScriptDir & "\" & sName) Then
+		If Not oFSO.FolderExists(sDestPath) Then
+			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
+			oFSO.CreateFolder sDestPath
+		End If
+		oLogging.CreateEntry "Preparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
+		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
+		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
+		CopyFile=0
+	Else
+		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
+		CopyFile=2
+	End If
+
+End Function
+</script>
+</job>

@@ -1,0 +1,126 @@
+<job id="Update-Dat">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Update-Dat.wsf
+' //
+' // Purpose: This will update McAfee Virusscan Enterprise Dat Definitions
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Update-Dat.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sInstallName
+	Dim sDatPath
+	Dim InstallFiles()
+	Dim i, stemp
+	
+	
+	'// Variables
+	sInstallName = "McAfee VirusScan Dat Definitions"
+	sDatPath = oUtility.ScriptDir & "\dat"
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " installation", LogTypeInfo
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = GetPatchFileList (sDatPath,InstallFiles)
+	
+	if iRetVal => 1 then
+		For i = 1 to iRetVal
+			iRetVal = oUtility.RunWithHeartbeat("""" & sDatPath & "\" & InstallFiles(i) & """ /SILENT /LOGFILE %windir%\temp\mcafee_dat.log")
+		Next
+	Else
+		oLogging.CreateEntry "There are no definitions files found", LogTypeInfo
+	End If
+
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+Function GetPatchFileList(FileFolder, FileStringArray()) 
+
+	Dim objFS, objFolder, objFile
+	Dim numPatches 
+	'create file system object 
+	Set objFS=CreateObject("Scripting.FileSystemObject") 
+	'set the a variable to point to our folder with the patches in it. 
+	Set objFolder=objFS.GetFolder(FileFolder) 
+	'set the initial file count to 0 
+	numPatches=0 
+
+	for each objFile in objFolder.Files 
+		if UCase(Right(objFile.Name,4))=".EXE" then 
+			numPatches=numPatches+1 
+
+			redim preserve FileStringArray(numPatches) 
+			FileStringArray(numPatches)=objFile.Name 
+		end if 
+
+	next 
+
+	GetPatchFileList=numPatches 
+End Function
+
+Function CopyFile(sName,sDestPath)
+
+	If oFSO.fileexists(oUtility.ScriptDir & "\" & sName) Then
+		If Not oFSO.FolderExists(sDestPath) Then
+			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
+			oFSO.CreateFolder sDestPath
+		End If
+		oLogging.CreateEntry "Preparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
+		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
+		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
+		CopyFile=0
+	Else
+		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
+		CopyFile=2
+	End If
+
+End Function
+</script>
+</job>

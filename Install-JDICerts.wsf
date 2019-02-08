@@ -1,0 +1,112 @@
+<job id="Install-JDICerts">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-JDICerts.wsf
+' //
+' // Purpose: This will use certutil to install certs from JDI
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-JDICerts.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sInstallName
+	Dim sCertDirPath
+	Dim objFolder, objFile
+	
+	
+	'// Variables	
+	sInstallName = "JDI root certs"
+
+	sCertDirPath = oUtility.ScriptDir & "\Certs"
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting to add JDI certs to the certificate store", LogTypeInfo	
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	'Install DOD Root Certs
+	'set the a variable to point to our folder with the files in it. 
+	Set objFolder=oFSO.GetFolder(sCertDirPath) 
+
+	for each objFile in objFolder.Files 
+		if UCase(oFSO.GetExtensionName(objFile.name)) = "CER" Then
+			oLogging.CreateEntry "Importing certificate: """ & sCertDirPath & "\" & objFile.Name & "", LogTypeInfo
+			iRetVal = oUtility.RunWithHeartbeat("certutil.exe -f -addstore -enterprise -user root """ & sCertDirPath & "\" & objFile.Name, 0, True)
+		end if
+	Next
+
+	
+	if (iRetVal = 0) or (iRetVal = 1) then
+		oLogging.CreateEntry "Finished adding JDI Certificate successfully", LogTypeInfo
+	Else 
+		oLogging.CreateEntry "Import failed. Return code from command = " & iRetVal, LogTypeError
+	End If
+	
+	'always end success
+	ZTIProcess = Success 
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

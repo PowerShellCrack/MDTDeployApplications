@@ -1,0 +1,118 @@
+<job id="Install-DODCerts">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-DODCerts.wsf
+' //
+' // Purpose: This will use certutil to install certs
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-DODCerts.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sInstallName
+	Dim sCertDirPath
+	Dim objFolder, objFile
+
+	
+	'// Variables
+	sInstallName = "DOD root certs"
+	
+	oLogging.CreateEntry "Starting to add certs to certificate store", LogTypeInfo	
+	
+	sCertDirPath = oUtility.ScriptDir & "\Certs"
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	'Install DOD Root Certs
+	'set the a variable to point to our folder with the files in it. 
+	Set objFolder = oFSO.GetFolder(sCertDirPath) 
+
+	for each objFile in objFolder.Files 
+		if UCase(oFSO.GetExtensionName(objFile.name)) = "CER" Then
+			oLogging.CreateEntry "importing to root certificate store: """ & sCertDirPath & "\" & objFile.Name & "", LogTypeInfo
+			iRetVal = oUtility.RunWithHeartbeat("certutil.exe –f -addstore -enterprise -user root """ & sCertDirPath & "\" & objFile.Name, 0, True)
+		end if
+		
+		WScript.Sleep 1000 
+	Next
+	
+	for each objFile in objFolder.Files 
+		if UCase(oFSO.GetExtensionName(objFile.name)) = "CER" Then
+			oLogging.CreateEntry "importing to intermediate store: """ & sCertDirPath & "\" & objFile.Name & "", LogTypeInfo
+			iRetVal = oUtility.RunWithHeartbeat("certutil.exe –f –addstore CA """ & sCertDirPath & "\" & objFile.Name, 0, True)
+		end if
+	Next
+
+	if (iRetVal = 0) or (iRetVal = 1) then
+		oLogging.CreateEntry "Successfully adding Certificate to intermediate store", LogTypeInfo
+	Else
+		oLogging.CreateEntry "Import failed. Return code from command = " & iRetVal, LogTypeError
+	End If
+	
+	'always end success
+	ZTIProcess = Success 
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

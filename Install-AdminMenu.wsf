@@ -1,0 +1,187 @@
+<job id="Install-AdminMenu">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-AdminMenu.wsf
+' //
+' // Purpose: This will install Powershellcrack Admin Run-As Menu
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-AdminMenu.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sType
+	Dim bUseNetConfigs,sNetConfigPath
+	Dim colorArgs
+	Dim xmlDoc, objNode
+	Dim sLocalConfigFile 	
+	
+			
+	'// Variables
+	sVersion = "3.9.9.3"
+	sArch = "x86"
+	sType = "no executable"
+	sFile = "Admin Run-As Menu " & sVersion & " (" & sType & ").exe"
+
+	'Get Color Arguments
+	If oUtility.Arguments.Exists("color") Then
+		colorArgs = oUtility.Arguments("color")
+	Else
+		colorArgs = "Blue"
+	End If
+	
+	'Apply Settings.
+	If oUtility.Arguments.Exists("configpath") Then
+		bUseNetConfigs = True
+		sNetConfigPath = oUtility.Arguments("configpath")
+	Else
+		bUseNetConfigs = False
+		sNetConfigPath = "\\server\share"
+	End If
+
+	If sArch = "x64" then
+		sLocalConfigFile = "C:\Program Files\Admin Run-As Menu\AdminMenu.ps1.config"
+	Else
+		sLocalConfigFile = "C:\Program Files (x86)\Admin Run-As Menu\AdminMenu.ps1.config"
+	End If
+	
+	sInstallName = "Powershellcrack Run-As AdminMenu"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	'Install Horizon View Client
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /VERYSILENT")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished Powershellcrack AdminMenu installation", LogTypeInfo
+
+		oLogging.CreateEntry "Editing configuration file: " & sLocalConfigFile, LogTypeInfo
+		' Path to your xml file
+
+		' Create an xml Documment object and load your file
+		Set xmlDoc =  CreateObject("Microsoft.XMLDOM")
+		xmlDoc.Async = "False"
+		xmlDoc.Load sLocalConfigFile
+
+		' Find the AdminMenu_Configs/Menu_Options/Option_Accent
+		Set objNode = xmlDoc.SelectSingleNode("//AdminMenu_Configs/Menu_Options/Option_Accent")
+		' Test that a node was returned
+		If Not objNode Is Nothing Then
+			objNode.Text = colorArgs
+			oLogging.CreateEntry "Changed color to: " & colorArgs, LogTypeVerbose	
+		End If
+		
+		
+		If bUseNetConfigs Then
+		
+			' Find the AdminMenu_Configs/Menu_Configs/Config_UseRemote
+			Set objNode = xmlDoc.SelectSingleNode("//AdminMenu_Configs/Menu_Configs/Config_UseRemote")
+			' Test that a node was returned
+			If Not objNode Is Nothing Then
+				objNode.Text = "True"
+				oLogging.CreateEntry "Enabled remote files", LogTypeVerbose
+			End If
+						
+			' Find the AdminMenu_Configs/Menu_Configs/Config_RemotePath
+			Set objNode = xmlDoc.SelectSingleNode("//AdminMenu_Configs/Menu_Configs/Config_RemotePath")
+			' Test that a node was returned
+			If Not objNode Is Nothing Then
+				objNode.Text = sNetConfigPath
+				oLogging.CreateEntry "Changed net path to: " & sNetConfigPath, LogTypeVerbose
+			End If
+		End If
+		
+		' Save the changes
+		xmlDoc.Save sLocalConfigFile
+		
+		' Clean up
+		If Not objNode Is Nothing Then
+			Set objNode = Nothing
+		End If
+		
+		Set xmlDoc = Nothing
+		
+		
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
