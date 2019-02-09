@@ -1,4 +1,4 @@
-<job id="Install-DefenderDef">
+<job id="Update-DefenderDef">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
@@ -8,9 +8,9 @@
 ' // Solution: MDT Solution Pack
 ' // File: Install-DefenderDef.wsf
 ' //
-' // Purpose: Used to install Microsoft Defender Definitions
+' // Purpose: Used to update Microsoft Defender Definitions
 ' //
-' // Usage: cscript Install-DefenderDef.wsf [/debug:true]
+' // Usage: cscript Update-DefenderDef.wsf [/debug:true]
 ' //
 ' // Script Version: 1.0.0
 ' // Microsoft History:
