@@ -1,0 +1,30 @@
+{
+"homepage" : "http://www.google.com",
+"homepage_is_newtabpage" : false,
+"browser" : {
+"show_home_button" : true,
+"check_default_browser" : false,
+"window_placement": {
+"bottom": 1000,
+"left": 10,
+"maximized": false,
+"right": 904,
+"top": 10,
+"work_area_bottom": 1010,
+"work_area_left": 0,
+"work_area_right": 1680,
+"work_area_top": 0
+}
+},
+"bookmark_bar" : {
+"show_on_all_tabs" : true
+},
+"distribution" : {
+"skip_first_run_ui" : true,
+"show_welcome_page" : false,
+"import_search_engine" : false,
+"import_history" : false,
+"create_all_shortcuts" : true,
+"do_not_launch_chrome" : true,
+"make_chrome_default" : false
+}
