@@ -1,0 +1,26 @@
+Windows Registry Editor Version 5.00
+;https://www.adobe.com/devnet-docs/acrobatetk/tools/PrefRef/Windows/index.html
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Adobe\Acrobat Reader\DC\Installer]
+;SV-79433r2_rule: Disable Repair Button
+"DisableMaintenance"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Adobe\Adobe ARM\1.0\ARM]
+"iCheck"=dword:00000000
+"iCheckReader"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Adobe\Adobe ARM\Legacy\Reader\{AC76BA86-7AD7-1033-7B44-AC0F074E4100}]
+;0= Do not download or install updates automatically.
+"Mode"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Adobe\Acrobat Reader\DC\AdobeViewer]
+;Accept EULA
+"EULA"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Adobe\Adobe Acrobat\DC\Access]
+;Toggles assistive technology on and off.
+"bEnableAT"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Adobe\Acrobat Reader\DC\AVGeneral]
+;disable Adobe Reader DC Welcome
+"bHideUnreadMsgAtLaunch"=dword:00000001
