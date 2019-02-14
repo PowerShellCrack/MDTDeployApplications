@@ -56,6 +56,7 @@ Function ZTIProcess()
 	Dim arySplitVer,sMajVer,sMinVer
 	Dim sLogFolder,sLogName,sLogPath
 	Dim sInstallerConfig
+	Dim sPrefix
 	
 	'// Variables
 	sVersion = "1.8.0.201"
@@ -65,7 +66,12 @@ Function ZTIProcess()
 	arySplitVer = Split(sVersion, ".")
 	sMajVer=arySplitVer(1)
 	sMinVer=arySplitVer(3)
-
+	
+	' check if MDT variable exists
+	If oEnvironment.Exists("Prefix") Then
+		sPrefix = oEnvironment.Item("Prefix")
+	End if
+	
 	If sArch = "x64" then
 		sFile = sType & "-" & sMajVer & "u" & sMinVer & "-windows-x64.exe"
 	Else
@@ -82,11 +88,11 @@ Function ZTIProcess()
 	Else
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
 	End If
-	oUtility.VerifyPathExists sLogPath
+	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName
 	
-	sInstallerConfig = oUtility.ScriptDir & "\Configs\java.settings.cfg"
+	sInstallerConfig = oUtility.ScriptDir & "\Configs\java.installsettings.cfg"
 	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
@@ -111,6 +117,25 @@ Function ZTIProcess()
 		ZTIProcess = Success 
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
 		'DeleteFolder "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Java"
+		oUtility.VerifyPathExists "C:\WINDOWS\Sun\Java\Deployment"
+		
+		'Copy deployment.config
+		oLogging.CreateEntry "Copying " & oUtility.ScriptDir & "\Configs\deployment.config to C:\WINDOWS\Sun\Java\Deployment", LogTypeVerbose		
+		oFSO.CopyFile oUtility.ScriptDir & "\Configs\deployment.config", "C:\WINDOWS\Sun\Java\Deployment\", True
+		
+		'Copy deployment.properties
+		If not oFSO.FileExists(oUtility.ScriptDir & "\Configs\deployment_"& sPrefix & ".properties") then
+			oFSO.CopyFile oUtility.ScriptDir & "\Configs\deployment.properties", "C:\WINDOWS\Sun\Java\Deployment\", True
+		Else
+			oFSO.CopyFile oUtility.ScriptDir & "\Configs\deployment_"& sPrefix & ".properties", "C:\WINDOWS\Sun\Java\Deployment\", True
+		End If
+		
+		'Copy exception.sites
+		If not oFSO.FileExists(oUtility.ScriptDir & "\Configs\exception_"& sPrefix & ".sites") then
+			oFSO.CopyFile oUtility.ScriptDir & "\Configs\exception.sites", "C:\WINDOWS\Sun\Java\Deployment\", True
+		Else
+			oFSO.CopyFile oUtility.ScriptDir & "\Configs\exception_"& sPrefix & ".sites", "C:\WINDOWS\Sun\Java\Deployment\", True
+		End If
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
@@ -127,6 +152,7 @@ Function CopyFile(sName,sDestPath)
 			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
 			oFSO.CreateFolder sDestPath
 		End If
+		
 		oLogging.CreateEntry "Preparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
 		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
 		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
