@@ -1,52 +1,37 @@
-<job id="Install-Certs">
+<job id="Install-JDICerts">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-Certs.wsf
+' // File: Install-JDICerts.wsf
 ' //
-' // Purpose: This will use certutil to install certs
+' // Purpose: This will use certutil to install certs from JDI
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Certs.wsf [/debug:true]
+' // Usage: cscript Install-JDICerts.wsf [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
 '//---------------------------------------------------------------------------- 
-
 Option Explicit 
 
 Dim iRetVal 
 
 '//----------------------------------------------------------------------------
-'// End declarations
-'//---------------------------------------------------------------------------- 
-
-'//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
-
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
 On Error Goto 0 
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
-'//
-'// Input: None
-'// 
-'// Return: Success - 0
-'// Failure - non-zero
-'//
-'// Purpose: Perform main ZTI processing
-'// 
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
@@ -56,12 +41,12 @@ Function ZTIProcess()
 	
 	
 	'// Variables	
-	sInstallName = "Root certs"
+	sInstallName = "JDI root certs"
 
 	sCertDirPath = oUtility.ScriptDir & "\Certs"
 	
 	'// Start the process
-	oLogging.CreateEntry "Starting to add Certs to the certificate store", LogTypeInfo	
+	oLogging.CreateEntry "Starting to add JDI certs to the certificate store", LogTypeInfo	
 
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
@@ -79,7 +64,7 @@ Function ZTIProcess()
 
 	
 	if (iRetVal = 0) or (iRetVal = 1) then
-		oLogging.CreateEntry "Finished adding Certificate successfully", LogTypeInfo
+		oLogging.CreateEntry "Finished adding JDI Certificate successfully", LogTypeInfo
 	Else 
 		oLogging.CreateEntry "Import failed. Return code from command = " & iRetVal, LogTypeError
 	End If

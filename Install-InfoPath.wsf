@@ -11,46 +11,48 @@
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-InfoPath.wsf [/debug:true]
+' // Usage: cscript Install-InfoPath.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
  
 '//----------------------------------------------------------------------------
-'//
 '// Global constant and variable declarations
-'//
 '//----------------------------------------------------------------------------
- 
 Option Explicit 
 
-Dim iRetVal 
-'//----------------------------------------------------------------------------
-'// End declarations
-'//----------------------------------------------------------------------------
- 
+Dim iRetVal
+
 '//----------------------------------------------------------------------------
 '// Main routine
 '//----------------------------------------------------------------------------
- 
-On Error Resume Next
+'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
-On Error Goto 0 
+On Error Goto 0
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
 '//---------------------------------------------------------------------------
-Function ZTIProcess() 
+Function ZTIProcess()
 
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
 	Dim sMSP, sXML, sCustomInstall, sMSPPath, sXMLPath
 	
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
+	Else
+		sArch = "x86"
+	End If
 	
-	'// Variables
+	'// Variables: 
+	'// Change if needed
 	sVersion = "15.0.4454.1000"
-	sArch = "x86"
 	sFile = "setup.exe"
 	sCustomInstall = "msp" 'choose msp or xml or none
 	sMSP = "INFOPATH15_SP1_SILENT.MSP"
@@ -60,7 +62,7 @@ Function ZTIProcess()
 	
 	sInstallName = "Microsoft InfoPath 2013"
 	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
 	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	

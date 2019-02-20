@@ -1,0 +1,167 @@
+<job id="Install-DefenderDef">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: MDT Solution Pack
+' // File: Install-DefenderDef.wsf
+' //
+' // Author: Richard Tracy
+' //
+' // Purpose: Used to install Microsoft Defender Definitions
+' //
+' // Usage: cscript Install-DefenderDef.wsf [/arch:x64|x86] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal 
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+	iRetVal = Success 
+	ZTIProcess = iRetval 
+	
+	Dim sInstallName
+	Dim sArch
+	
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sInstallName = "Microsoft Defender Definitions"
+	
+	oLogging.CreateEntry "Starting installation", LogTypeInfo	
+
+	' Look for a file with the pattern *MSEInstall*.exe
+	Dim oFolder, files, folderIdx
+	Dim sSourceDir, sInstaller,sNISInstaller,sInstallPath
+  	Dim oRegExp
+  	Set oRegExp = CreateObject("VBScript.RegExp")
+  	oRegExp.Pattern = "(.*)mpam-fe(.*)\.exe"
+	oRegExp.IgnoreCase = True
+	
+	sSourceDir = oUtility.ScriptDir & "\Source\Win8_10\" & sArch
+	oLogging.CreateEntry "" & sSourceDir &" path will be used.", LogTypeInfo
+
+	sInstaller = ""
+	Set oFolder = oFSO.GetFolder(sSourceDir)
+	Set files = oFolder.Files    
+	For Each folderIdx In files
+		If oRegExp.Test(folderIdx.Name) Then 
+			sInstaller = folderIdx.Name
+			Exit For
+		End If 
+	Next
+
+	If sInstaller = "" Then
+		oLogging.CreateEntry "file was not found, unable to install.", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	Else
+		oLogging.CreateEntry "" & sInstaller & " file will be ran", LogTypeInfo
+	End If
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	oLogging.CreateEntry "Starting Security Essentials definition", LogTypeInfo
+	
+	sInstallPath = sSourceDir & "\" & sInstaller
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallPath & """")
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished Defender definition file ran", LogTypeInfo	
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry "Failed to update Defender definitions. Return code from command = " & iRetVal, LogTypeInfo
+	End If
+	
+	
+	
+	sNISInstaller = oUtility.ScriptDir & "\Source\NIS\x64\nis_full.exe"
+	If not oFSO.FileExists(sNISInstaller) then
+		oLogging.CreateEntry "" & sNISInstaller & " was not found, unable to install AntiMalware definitions", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	iRetVal = oUtility.RunWithHeartbeat("""" & sNISInstaller & """")
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished AntiMalware definition file Install", LogTypeInfo	
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry "Failed to update AntiMalware definitions. Return code from command = " & iRetVal, LogTypeInfo
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+	
+End Function 
+
+Function GetPatchFileList(FileFolder, FileStringArray()) 
+
+	Dim objFS, objFolder, objFile
+	Dim numPatches 
+	'create file system object 
+	Set objFS=CreateObject("Scripting.FileSystemObject") 
+	'set the a variable to point to our folder with the patches in it. 
+	Set objFolder=objFS.GetFolder(FileFolder) 
+	'set the initial file count to 0 
+	numPatches=0 
+
+	for each objFile in objFolder.Files 
+		if UCase(Right(objFile.Name,4))=".EXE" then 
+			numPatches=numPatches+1 
+
+			'redim preserve FileStringArray(numPatches) 
+			FileStringArray(numPatches)=objFile.Name 
+		end if 
+
+	next 
+
+	GetPatchFileList=numPatches 
+End Function 
+
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

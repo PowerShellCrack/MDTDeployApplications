@@ -1,34 +1,34 @@
-<job id="Install-AdobeFlashNPAPI">
+<job id="Install-IPTV">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
-<script language="VBScript">
- 
+<script language="VBScript"> 
+
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-AdobeFlashPPAPI.wsf
+' // File: Install-IPTV.wsf
 ' //
-' // Purpose: This will install Adobe Flash Plugin for Chrome
+' // Purpose: This will install VITEC IPTV Plugins
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-AdobeFlashPPAPI.wsf [/arch:x64|x86] [/debug:true]
+' // Usage: cscript Install-IPTV.wsf [/EZTVURL:<URL>] [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
- 
+
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
-'//----------------------------------------------------------------------------
+'//---------------------------------------------------------------------------- 
 Option Explicit 
 
-Dim iRetVal 
+Dim iRetVal
 
 '//----------------------------------------------------------------------------
 '// Main routine
-'//----------------------------------------------------------------------------
+'//---------------------------------------------------------------------------- 
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
-On Error Goto 0 
+On Error Goto 0
 
 '//---------------------------------------------------------------------------
 '// Function: ZTIProcess()
@@ -37,13 +37,13 @@ Function ZTIProcess()
 
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
-	Dim sType
-	Dim arySplitVer,sMajVer,sMinVer
 	Dim sLogFolder,sLogName,sLogPath
-
+	Dim sFile2,sInstallerPath2
+	Dim oLink,sLink
+		
 	'// Apply Architecture arguments:
-	'// If no argument provided check for MDT/SCCM variable
-	'// If no variable or argument is provided, defualt to x86
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
 		sArch = oUtility.Arguments("arch")
 	ElseIf oEnvironment.Exists("Architecture") Then
@@ -51,22 +51,26 @@ Function ZTIProcess()
 	Else
 		sArch = "x86"
 	End If
-	
+
+	'// Apply EZTV URL Arguments:
+	If oUtility.Arguments.Exists("EZTVURL") Then
+		sLink = oUtility.Arguments("EZTVURL")
+	ElseIf oEnvironment.Exists("EZTVURL") Then 
+		sLink = oEnvironment.Item("EZTVURL")
+	End If
+
 	'// Variables: 
 	'// Change if needed
-	sVersion = "32.0.0.114"
-	sType = "plugin"
+	sVersion = "7.5.1.7"
 	
-	arySplitVer = Split(sVersion, ".")
-	sMajVer=arySplitVer(0)
-	sMinVer=arySplitVer(3)
+	sFile = "IPTVPlayerSetup.exe"
+	sFile2 = "IPTV_Monitor_Setup.exe"
 	
-	sFile = "Install_flash_player_" & sMajVer &"_" & sType & ".msi"
-	
-	sInstallName = "Adobe Flash Firefox Plugin"
-	
+	sInstallName = "VITEC IPTV Plugins"
+		
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
-	
+	sInstallerPath2 = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile2
+
 	'// Build log path (incase not used in task sequence)
 	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
 		sLogFolder = oEnv("TEMP") & "\AppLogs"
@@ -85,29 +89,47 @@ Function ZTIProcess()
 		ZTIProcess = Failure
 		Exit Function
 	End if
-
+	
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
+	iRetVal = oUtility.RunWithHeartbeat("" & sInstallerPath & "")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
-		ZTIProcess = Success 
-		oFSO.CopyFile (oUtility.ScriptDir & "\Source\mms.cfg"), ("C:\Windows\system32\Macromed\Flash\mms.cfg"), True
-		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo  	
+		ZTIProcess = Success
+		iRetVal = oUtility.RunWithHeartbeat("" & sInstallerPath2 & "")
+		
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+		
+		
+		if sLink <> "" Then
+			Set oLink = oShell.CreateShortcut(oShell.SpecialFolders("AllUsersDesktop") & "\EZTV.lnk")
+			
+			If sArch = "x64" then
+				oLink.TargetPath = oEnv("PROGRAMFILES") & "\internet explorer\iexplore.exe"
+				oLink.Arguments = """" & oEnv("PROGRAMFILES") & "\internet explorer\iexplore.exe """ & sLink & ""
+			Else
+				oLink.TargetPath = oEnv("PROGRAMFILES(X86)") & "\internet explorer\iexplore.exe"
+				oLink.Arguments = """" & oEnv("PROGRAMFILES(X86)") & "\internet explorer\iexplore.exe """ & sLink & ""
+			End If
+			
+			oLink.Arguments = """C:\Program Files\internet explorer\iexplore.exe" & sLink & ""
+			oLink.Save
+
+			oLogging.CreateEntry "Shortcut """ & oShell.SpecialFolders("AllUsersDesktop") & "\EZTV.lnk"" created.", LogTypeInfo
+		End If	
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
 	End If
 	
 	'// Enable Zone Checks
-	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
 
 End Function 
 
 Function CopyFile(sName,sDestPath)
-
-	If oFSO.fileexists(oUtility.ScriptDir & "\" & sName) Then
+	If oFSO.FileExists(oUtility.ScriptDir & "\" & sName) Then
 		If Not oFSO.FolderExists(sDestPath) Then
 			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
 			oFSO.CreateFolder sDestPath
@@ -125,6 +147,20 @@ End Function
 
 </script>
 </job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

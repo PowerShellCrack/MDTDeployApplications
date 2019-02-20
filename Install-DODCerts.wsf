@@ -18,35 +18,20 @@
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
 '//---------------------------------------------------------------------------- 
-
 Option Explicit 
 
-Dim iRetVal 
-
-'//----------------------------------------------------------------------------
-'// End declarations
-'//---------------------------------------------------------------------------- 
+Dim iRetVal
 
 '//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
-
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
 On Error Goto 0 
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
-'//
-'// Input: None
-'// 
-'// Return: Success - 0
-'// Failure - non-zero
-'//
-'// Purpose: Perform main ZTI processing
-'// 
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
@@ -54,7 +39,6 @@ Function ZTIProcess()
 	Dim sCertDirPath
 	Dim objFolder, objFile
 
-	
 	'// Variables
 	sInstallName = "DOD root certs"
 	

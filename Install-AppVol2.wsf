@@ -1,92 +1,83 @@
-<job id="Install-Java64">
+<job id="Install-AppVol2">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-Java.wsf
+' // File: Install-AppVol2.wsf
 ' //
-' // Purpose: This will install Java 64-bit
+' // Purpose: This will install Vmware AppVolume 2x Manager
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Java64.wsf [/debug:true]
+' // Usage: cscript Install-AppVol2.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
 '//---------------------------------------------------------------------------- 
-
 Option Explicit 
 
 Dim iRetVal 
-
-'//----------------------------------------------------------------------------
-'// End declarations
-'//---------------------------------------------------------------------------- 
-
 '//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
-
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
 On Error Goto 0 
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
-'//
-'// Input: None
-'// 
-'// Return: Success - 0
-'// Failure - non-zero
-'//
-'// Purpose: Perform main ZTI processing
-'// 
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
 	Dim sVersion,sArch,sFile
-	Dim sType
 	Dim sInstallName, sInstallerPath
-	Dim arySplitVer,sMajVer,sMinVer
 	Dim sLogFolder,sLogName,sLogPath
-	Dim sInstallerConfig
-	
-	'// Variables
-	sVersion = "1.8.0.201"
-	sArch = "x64"
-	sType = "jre"
+	Dim sAppMgr
 
-	arySplitVer = Split(sVersion, ".")
-	sMajVer=arySplitVer(1)
-	sMinVer=arySplitVer(3)
-
-	If sArch = "x64" then
-		sFile = sType & "-" & sMajVer & "u" & sMinVer & "-windows-x64.exe"
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
 	Else
-		sFile = sType & "-" & sMajVer & "u" & sMinVer & "-windows-i586.exe"
+		sArch = "x86"
 	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "2.14.2.9"
+	
+	sFile = "App Volumes Agent.msi"
+	
+	If oEnvironment.Exists("AppVolMgrServer") Then
+		sAppMgr = oEnvironment.Item("AppVolMgrServer")
+	End if
+	
+	'Apply Arguments
+	If oUtility.Arguments.Exists("AppMgr") Then
+		sAppMgr = oUtility.Arguments("AppMgr")
+	End If
+	
+	sInstallName = "Vmware AppVolume Manager 2x"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 
-	sInstallName = "Java (" & UCase(sType) & ")"
-	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sVersion & "\" & sFile
-	
 	'// Build log path (incase not used in task sequence)
 	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
 		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	Else
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
 	End If
-	oUtility.VerifyPathExists sLogPath
+	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName
-	
-	sInstallerConfig = oUtility.ScriptDir & "\Configs\java.settings.cfg"
 	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
@@ -99,25 +90,19 @@ Function ZTIProcess()
 	
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
-	
-	
-	
-	If not oFSO.FileExists(sInstallerConfig) then
-		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /s REMOVEOUTOFDATEJRES=1 /L """ & sLogPath & """")
-	Else
-		oFSO.CopyFile sInstallerConfig, oEnv("TEMP") & "\", True
-		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ INSTALLCFG=""" & oEnv("TEMP") & "\java.settings.cfg"" /L """ & sLogPath & """")
-	End if
 
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn MANAGER_ADDR=""" & sAppMgr & """ MANAGER_PORT=80 REBOOTREQUIRED=0 RebootYesNo=No /l*v """ & sLogPath & """")
+	
 	if (iRetVal = 0) or (iRetVal = 3010) then
-		ZTIProcess = Success 
+		ZTIProcess = Success
+		oShell.RegWrite "HKLM\System\CurrentControlSet\Services\svservices\Parameters\EnforceSSlCertificateValidation", 0, "REG_DWORD"
+		
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
-		'DeleteFolder "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Java"
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
 	End If
-
+	
 	'// Enable Zone Checks
 	oEnv.Remove("SEE_MASK_NOZONECHECKS")
 
@@ -140,20 +125,6 @@ Function CopyFile(sName,sDestPath)
 
 End Function
 
-Function DeleteFolder(sPath)
-
-	On error resume next
-	Dim strPath
-	strPath = sPath
-	If oFSO.FolderExists(strPath) Then
-		oLogging.CreateEntry "Folder Found: " & strPath, LogTypeInfo
-		oFSO.DeleteFolder strPath,0
-		oLogging.CreateEntry "Folder Deleted: " & strPath, LogTypeInfo
-	Else
-		oLogging.CreateEntry "Folder Not Found: " & strPath & ", skipping", LogTypeInfo
-	End If
-
-End Function
 </script>
 </job>
 

@@ -1,73 +1,70 @@
-<job id="Install-Firefox">
+<job id="Install-Visio64">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
-<script language="VBScript"> 
-
+<script language="VBScript">
+ 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-Firefox.wsf
+' // File: Install-Visio.wsf
 ' //
-' // Purpose: This will install Mozilla Firefox
+' // Purpose: This will install Microsoft Visio 2016
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Firefox.wsf [/debug:true]
+' // Usage: cscript Install-Visio.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
 '//---------------------------------------------------------------------------- 
-
 Option Explicit 
 
-Dim iRetVal 
-
-'//----------------------------------------------------------------------------
-'// End declarations
-'//---------------------------------------------------------------------------- 
+Dim iRetVal
 
 '//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
-
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
-On Error Goto 0 
+On Error Goto 0
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
-'//
-'// Input: None
-'// 
-'// Return: Success - 0
-'// Failure - non-zero
-'//
-'// Purpose: Perform main ZTI processing
-'// 
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
-	Dim sInstallName,sVersion
-	Dim sFile, sInstallerPath,sArch
-	Dim sInstalledPath
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sMSP, sXML, sCustomInstall, sMSPPath, sXMLPath
 	
-	'// Variables
-	sVersion = "65.0"
-	sArch = "x64"
 	
-	If sArch = "x64" then
-		sFile = "Firefox Setup " & sVersion & " (x64).exe"
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
 	Else
-		sFile = "Firefox Setup " & sVersion & ".exe"
+		sArch = "x86"
 	End If
 	
-	sInstallName = "Mozilla Firefox"
-	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	'// Variables: 
+	'// Change if needed
+	sVersion = "16.0.4266.1001"
 
+	sFile = "setup.exe"
+	sCustomInstall = "msp" 'choose msp or xml or none
+	sMSP = "FULL_SILENT.MSP"
+	sXML = "FULL_SILENT.xml"
+	sMSPPath = oUtility.ScriptDir & "\configs\" & sMSP
+	sXMLPath = oUtility.ScriptDir & "\configs\" & sXML
+
+	sInstallName = "Microsoft Visio 2016"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
 	
@@ -76,50 +73,30 @@ Function ZTIProcess()
 		ZTIProcess = Failure
 		Exit Function
 	End if
-	
+
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ -ms /INI=""" & oUtility.ScriptDir & "\Configs\firefox.ini""""")
+	if sCustomInstall = "msp" then
+		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /adminfile """ & sMSPPath & """")
+	Elseif sCustomInstall = "xml" then
+		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /config """ & sXMLPath & """")
+	Else
+		iRetVal = oUtility.RunWithHeartbeat(sInstallerPath)
+	End If
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
-		ZTIProcess = Success 
-		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
-		sInstalledPath = "C:\Program Files\Mozilla Firefox"
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mozilla.cfg"), (sInstalledPath & "\mozilla.cfg"), True
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\override.ini"), (sInstalledPath & "\browser\override.ini"), True
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\local-settings.js"), (sInstalledPath & "\defaults\pref\local-settings.js"), True
+		ZTIProcess = Success
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo  	
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
 	End If
 	
 	'// Enable Zone Checks
-	oEnv.Remove("SEE_MASK_NOZONECHECKS")
-
-End Function 
-
-
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+	
+End Function
 </script>
 </job>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

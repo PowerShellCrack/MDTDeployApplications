@@ -1,69 +1,77 @@
-<job id="Install-Office">
+<job id="Install-MBAM">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
-<script language="VBScript">
- 
+<script language="VBScript"> 
+
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-Office.wsf
+' // File: Install-MBAM.wsf
 ' //
-' // Purpose: This will install Microsoft Office 2016
+' // Purpose: This will install Microsoft Bitlocker Administration Client
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Office.wsf [/debug:true]
+' // Usage: cscript Install-MBAM.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
- 
+
 '//----------------------------------------------------------------------------
-'//
 '// Global constant and variable declarations
-'//
 '//----------------------------------------------------------------------------
- 
 Option Explicit 
 
-Dim iRetVal 
-'//----------------------------------------------------------------------------
-'// End declarations
-'//----------------------------------------------------------------------------
- 
+Dim iRetVal
+
 '//----------------------------------------------------------------------------
 '// Main routine
 '//----------------------------------------------------------------------------
- 
-On Error Resume Next
+'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
 On Error Goto 0 
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
 	Dim sVersion,sArch,sFile
+	Dim arySplitVer,sSimpleVer
 	Dim sInstallName, sInstallerPath
-	Dim sMSP, sXML, sCustomInstall, sMSPPath, sXMLPath
-	
-	
-	'// Variables	
-	sVersion = "16.0.4266.1001"
-	sArch = "x86"
-	sFile = "setup.exe"
-	
-	sCustomInstall = "msp" 'choose msp or xml or none
-	sMSP = UCase(sArch) & "_O16FULL_NOONEDRIVE.MSP"
-	sXML = UCase(sArch) & "_O16FULL_NOONEDRIVE.xml"
-	
-	sMSPPath = oUtility.ScriptDir & "\configs\" & sMSP
-	sXMLPath = oUtility.ScriptDir & "\configs\" & sXML
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sLicense
 
-	sInstallName = "Microsoft Office 2016"
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
+	Else
+		sArch = "x86"
+	End If
 	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	'// Variables: 
+	'// Change if needed
+	sVersion = "2.5.0244.0"	
+	
+	sInstallName = "MBAM"
+	
+	oLogging.CreateEntry sInstallName & ": Starting MBAM installation", LogTypeInfo
 
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\"& sArch &"\MbamClientSetup.exe"
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
 	
@@ -76,26 +84,22 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	if sCustomInstall = "msp" then
-		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /adminfile """ & sMSPPath & """")
-	Elseif sCustomInstall = "xml" then
-		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /config """ & sXMLPath & """")
-	Else
-		iRetVal = oUtility.RunWithHeartbeat(sInstallerPath)
-	End If
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success
-		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo  	
+			
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
 	End If
-	
-	'// Enable Zone Checks
+
+	'/// Enable Zone Checks
 	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
-	
-End Function
+
+End Function 
+
 </script>
 </job>
 

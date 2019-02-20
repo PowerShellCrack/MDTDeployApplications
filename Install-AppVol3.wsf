@@ -1,90 +1,84 @@
-<job id="Install-7z">
+<job id="Install-AppVol3">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-7z.wsf
+' // File: Install-AppVol3.wsf
 ' //
-' // Purpose: This will install 7z
+' // Purpose: This will install Vmware AppVolume 2x Manager
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-7z.wsf [/debug:true]
+' // Usage: cscript Install-AppVol3.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
 '//---------------------------------------------------------------------------- 
-
 Option Explicit 
 
 Dim iRetVal 
 
 '//----------------------------------------------------------------------------
-'// End declarations
-'//---------------------------------------------------------------------------- 
-
-'//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
-
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
 On Error Goto 0 
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
-'//
-'// Input: None
-'// 
-'// Return: Success - 0
-'// Failure - non-zero
-'//
-'// Purpose: Perform main ZTI processing
-'// 
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
-	Dim arySplitVer,sMajVer,sMinVer
-	Dim sExtension
 	Dim sLogFolder,sLogName,sLogPath
+	Dim sAppMgr
 
-	'// Variables
-	sVersion = "18.06"
-	sArch = "x64"
-	sExtension = "msi"
-	
-	arySplitVer = Split(sVersion, ".")
-	sMajVer=arySplitVer(0)
-	sMinVer=arySplitVer(1)
-
-	If sArch = "x64" then
-		sFile = "7z" & sMajVer & sMinVer & "-x64." & sExtension
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
 	Else
-		sFile = "7z" & sMajVer & sMinVer & "." & sExtension
+		sArch = "x86"
 	End If
 	
-	sInstallName = "7-Zip"
+	'// Variables: 
+	'// Change if needed
+	sVersion = "3.0.0-148"
+
+	sFile = "VMware-appvolumes-unifiedagent-"& sArch &"-"& sVersion &".exe"
 	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	'// Apply App Vol Manager arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	If oUtility.Arguments.Exists("AppMgr") Then
+		sAppMgr = oUtility.Arguments("AppMgr")
+	ElseIf oEnvironment.Exists("AppVolMgrServer") Then
+		sAppMgr = oEnvironment.Item("AppVolMgrServer")
+	End If
 	
+	sInstallName = "Vmware AppVolume Manager 3x"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
+
 	'// Build log path (incase not used in task sequence)
 	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
 		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	Else
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
 	End If
-	oUtility.VerifyPathExists sLogPath
+	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName
-
+	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
 	
@@ -97,15 +91,12 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	'Install 7Zip
-	If sExtension = "msi" then
-		iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
-	Else
-		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /S")
-	End If
-
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /S /v/qn /V""PORT=80 ADDR="& sAppMgr &" /l*v " & sLogPath & """")
+	
 	if (iRetVal = 0) or (iRetVal = 3010) then
-		ZTIProcess = Success 
+		ZTIProcess = Success
+		oShell.RegWrite "HKLM\System\CurrentControlSet\Services\svservices\Parameters\EnforceSSlCertificateValidation", 0, "REG_DWORD"
+		
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
 	Else 
 		ZTIProcess = Failure
@@ -117,9 +108,29 @@ Function ZTIProcess()
 
 End Function 
 
+Function CopyFile(sName,sDestPath)
+	If oFSO.FileExists(oUtility.ScriptDir & "\" & sName) Then
+		If Not oFSO.FolderExists(sDestPath) Then
+			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
+			oFSO.CreateFolder sDestPath
+		End If
+		oLogging.CreateEntry "Preparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
+		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
+		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
+		CopyFile=0
+	Else
+		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
+		CopyFile=2
+	End If
+
+End Function
 
 </script>
 </job>
+
+
+
+
 
 
 

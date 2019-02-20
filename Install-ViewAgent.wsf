@@ -1,80 +1,79 @@
-<job id="Install-FireFoxNoService">
+<job id="Install-ViewAgent">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-FireFoxNoService.wsf
+' // File: Install-ViewAgent.wsf
 ' //
-' // Purpose: This will install Mozilla Firefox with no Maintenance Service
+' // Purpose: This will install Horizon View VDI Agent
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-FireFoxNoService.wsf [/debug:true]
+' // Usage: cscript Install-ViewAgent.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
 '//---------------------------------------------------------------------------- 
-
 Option Explicit 
 
-Dim iRetVal 
-
-'//----------------------------------------------------------------------------
-'// End declarations
-'//---------------------------------------------------------------------------- 
+Dim iRetVal
 
 '//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
-
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
-On Error Goto 0 
+On Error Goto 0
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
-'//
-'// Input: None
-'// 
-'// Return: Success - 0
-'// Failure - non-zero
-'//
-'// Purpose: Perform main ZTI processing
-'// 
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
-	Dim sServiceInstaller
-	Dim sInstalledPath
+	Dim sLogFolder,sLogName,sLogPath
 	
-	'// Variables
-	sVersion = "65.0"
-	sArch = "x64"
-	
-	If sArch = "x64" then
-		sFile = "Firefox Setup " & sVersion & " (x64)\Setup.exe"
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
 	Else
-		sFile = "Firefox Setup " & sVersion & "\Setup.exe"
+		sArch = "x86"
 	End If
 	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "7.6.0-9539447"
+	
 	If sArch = "x64" then
-		sServiceInstaller = oUtility.ScriptDir & "\Firefox Setup " & sVersion & " (x64)\core\maintenanceservice_installer.exe"
+		sFile = "VMware-Horizon-Agent-x86_64-" & sVersion & ".exe"
 	Else
-		sServiceInstaller = oUtility.ScriptDir & "\Firefox Setup " & sVersion & "\core\maintenanceservice_installer.exe"
+		sFile = "VMware-Horizon-Agent-x86-" & sVersion & ".exe"
 	End If
 	
-	sInstallName = "Mozilla Firefox"
-	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	sInstallName = "VMWare Horizon View VDI Agent"
 
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
 	
@@ -86,31 +85,21 @@ Function ZTIProcess()
 	
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
-	
-	'// delete core\maintenanceservice_installer.exe
-	If oFSO.FileExists(sServiceInstaller) Then
-		oFSO.DeleteFile sServiceInstaller
-	end if
-	
-	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ -ms /INI=""" & oUtility.ScriptDir & "\Configs\firefox.ini""""")
+
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /s /v""/qn /norestart VDM_VC_MANAGED_AGENT=1 VDM_FIPS_ENABLED=0 INSTALL_VDISPLAY_DRIVER=1 VDM_FLASH_URL_REDIRECTION=1 ADDLOCAL=""Core,ThinPrint,NGVC,FlashURLRedirection,RTAV,VmVideo,SmartCard,RDSH3D,HTML5MMR"" /l*v """ & sLogPath & """""")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success 
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
-		sInstalledPath = "C:\Program Files\Mozilla Firefox"
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mozilla.cfg"), (sInstalledPath & "\mozilla.cfg"), True
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\override.ini"), (sInstalledPath & "\browser\override.ini"), True
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\local-settings.js"), (sInstalledPath & "\defaults\pref\local-settings.js"), True
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
 	End If
-	
+
 	'// Enable Zone Checks
 	oEnv.Remove("SEE_MASK_NOZONECHECKS")
 
 End Function 
-
 
 </script>
 </job>

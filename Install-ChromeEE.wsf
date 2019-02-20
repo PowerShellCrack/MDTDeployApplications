@@ -11,34 +11,26 @@
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-ChromeEE.wsf [/debug:true]
+' // Usage: cscript Install-ChromeEE.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
  
 '//----------------------------------------------------------------------------
-'//
 '// Global constant and variable declarations
-'//
 '//----------------------------------------------------------------------------
- 
 Option Explicit 
 
 Dim iRetVal 
-'//----------------------------------------------------------------------------
-'// End declarations
-'//----------------------------------------------------------------------------
- 
+
 '//----------------------------------------------------------------------------
 '// Main routine
 '//----------------------------------------------------------------------------
- 
-On Error Resume Next
+'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
 On Error Goto 0 
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
@@ -48,10 +40,21 @@ Function ZTIProcess()
 	Dim sLogFolder,sLogName,sLogPath
 	Dim sInstalledPath
 	
-	'// Variables
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Variables: 
+	'// Change if needed
 	sVersion = "72.0.3626.81"
-	sArch = "x64"
-		
+	
 	If sArch = "x64" then
 		sFile = "googlechromestandaloneenterprise64.msi"
 	Else
@@ -60,7 +63,7 @@ Function ZTIProcess()
 	
 	sInstallName = "Google Chrome Enterprise Edition"
 	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sVersion & "\" & sFile
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 	
 	'// Build log path (incase not used in task sequence)
 	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
@@ -68,7 +71,7 @@ Function ZTIProcess()
 	Else
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
 	End If
-	oUtility.VerifyPathExists sLogPath
+	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName
 
@@ -90,10 +93,11 @@ Function ZTIProcess()
 		ZTIProcess = Success 
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo 
 		If sArch = "x64" then
-			sInstalledPath = "C:\Program Files\Google\Chrome\Application"
+			sInstalledPath = oEnv("PROGRAMFILES") & "\Google\Chrome\Application"
 		Else
-			sInstalledPath = "C:\Program Files (x86)\Google\Chrome\Application"
+			sInstalledPath = oEnv("PROGRAMFILESX86") & "\Google\Chrome\Application"
 		End If
+		oUtility.VerifyPathExists sInstalledPath
 		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\master_preferences.txt"), (sInstalledPath & "\master_preferences.txt"), True
 	Else 
 		ZTIProcess = Failure

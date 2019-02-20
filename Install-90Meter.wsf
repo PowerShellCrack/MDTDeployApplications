@@ -11,21 +11,26 @@
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-90Meter.wsf [/debug:true]
+' // Usage: cscript Install-90Meter.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
 Option Explicit 
 
-Dim iRetVal 
+Dim iRetVal
 
-On Error Resume Next
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
-On Error Goto 0 
+On Error Goto 0
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
@@ -33,20 +38,48 @@ Function ZTIProcess()
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
 	Dim sLogFolder,sLogName,sLogPath
+	Dim sLog2Name,sLog2Path
+	Dim sPatch,sPatchPath
 	
-	'// Variables
-	sVersion = "1.2.27"
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "1.4.32"
 	sArch = "x64"
 	
 	If sArch = "x64" then
 		sFile = "SCM_"& sVersion &"_64Bit_S.msi"
 	Else
-		sFile = "SCM_"& sVersion &_32Bit_S.msi"
+		sFile = "SCM_"& sVersion & "_32Bit_S.msi"
+	End If
+	
+	If sArch = "x64" then
+		sPatch = "SCM_1.4.33_64Bit_S_RC4.msi"
+	Else
+		sPatch = "SCM_1.4.33_32Bit_S_RC4.msi"
+	End If
+	
+	If sArch = "x64" then
+		sCertRoot = "InstallRoot_v3.16.3Sx64.exe"
+	Else
+		sCertRoot = "InstallRoot_v3.16.3S.exe"
 	End If
 	
 	sInstallName = "90Meter"
 	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sVersion & "\" & sFile
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
+	sPatchPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sPatch
+	sCertRootPath = oUtility.ScriptDir & "\Configs\" & sCertRoot
 	
 	'// Build log path (incase not used in task sequence)
 	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
@@ -54,9 +87,12 @@ Function ZTIProcess()
 	Else
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
 	End If
-	oUtility.VerifyPathExists sLogPath
+	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName
+	sLog2Name = Replace(sInstallName & "_Patch_" & sVersion & "_" & sArch & ".log"," ","")
+	sLog2Path = sLogFolder & "\" & sLog2Name
+	
 	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
@@ -73,7 +109,28 @@ Function ZTIProcess()
 	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
-		ZTIProcess = Success 
+		
+		iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sPatchPath & """ /qn /norestart /l*v """ & sLog2Path & """")
+		
+		if (iRetVal = 0) or (iRetVal = 3010) then
+			ZTIProcess = Success
+			iRetVal = oUtility.RunWithHeartbeat("""" & sCertRootPath & """ /s")
+			
+			'oLogging.CreateEntry "importing to root certificate store: """ & sCertDirPath, LogTypeInfo
+			'iRetVal = oUtility.RunWithHeartbeat("certutil.exe –f -addstore -enterprise -user root """ & sCertDirPath)
+			
+			'oLogging.CreateEntry "importing to intermediate store: """ & sCertDirPath & "\" & objFile.Name & "", LogTypeInfo
+			'iRetVal = oUtility.RunWithHeartbeat("certutil.exe –f –addstore CA """ & oUtility.ScriptDir & "\Configs\90m_CodeSigning_Cert.cer"" -c -s -r localMachine TrustedPublisher")
+			
+			If oEnvironment.Item("IsVM") = "False" Then
+				oLogging.CreateEntry "Installing drivers for the OMNIKEY3x2x Reader on " & sArch & " systems", LogTypeInfo
+				iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Configs\HID_OMNIKEY3x2x_" & sArch & "_W7_R1_2_24_27.exe"" /noreboot /S /v/qn")
+
+				oLogging.CreateEntry "Installing drivers for the SCR3xx Reader on " & sArch & " systems", LogTypeInfo
+				iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Configs\SCR3xx_Driver_V4.67\dpinst.exe"" /LM /SA /SW /S")
+			End If
+		End If
+
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo		
 	Else 
 		ZTIProcess = Failure
@@ -84,6 +141,7 @@ Function ZTIProcess()
 	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
 
 End Function
+
 </script>
 </job>
 

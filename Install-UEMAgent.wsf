@@ -1,76 +1,90 @@
-<job id="Install-NotepadPlusPlus">
+<job id="Install-UEMAgent">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-NotepadPlusPlus.wsf
+' // File: Install-UEMAgent.wsf
 ' //
-' // Purpose: This will install Notepad++
+' // Purpose: This will install User Environment Manager Agent
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-NotepadPlusPlus.wsf [/debug:true]
+' // Usage: cscript Install-UEMAgent.wsf [/license:<path-to-lic>] [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
 '//---------------------------------------------------------------------------- 
-
 Option Explicit 
 
 Dim iRetVal 
-
-'//----------------------------------------------------------------------------
-'// End declarations
-'//---------------------------------------------------------------------------- 
-
 '//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
-
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
 On Error Goto 0 
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
-'//
-'// Input: None
-'// 
-'// Return: Success - 0
-'// Failure - non-zero
-'//
-'// Purpose: Perform main ZTI processing
-'// 
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
-	Dim sInstallName,sVersion
-	Dim sFile, sInstallerPath,sArch
-	Dim sFolder
-	
-	
-	'// Variables
-	sVersion = "7.6.3"
-	sArch = "x64"
-	
-	If sArch = "x64" then
-		sFile = "npp." & sVersion & ".Installer.x64.exe"
-		sFolder = "C:\Program Files\Notepad++\plugins\ComparePlugin"
+	Dim sVersion,sArch,sFile
+	Dim arySplitVer,sSimpleVer
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sLicense
+
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
 	Else
-		sFile = "npp." & sVersion & ".Installer.exe"
-		sFolder = "C:\Program Files (x86)\Notepad++\plugins\ComparePlugin"
+		sArch = "x86"
 	End If
 	
-	sInstallName = "Notepad++"
+	'// Variables: 
+	'// Change if needed
+	sVersion = "9.5.0.832"
 	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+	arySplitVer = Split(sVersion, ".")
+	sSimpleVer = arySplitVer(0) & "." & arySplitVer(1)
+	
+	'// Apply license arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	If oUtility.Arguments.Exists("license") Then
+		sLicense = oUtility.Arguments("license")
+	ElseIf oEnvironment.Exists("UEMlicense") Then
+		sLicense = oEnvironment.Item("UEMlicense")
+	Else
+		sLicense = oUtility.ScriptDir & "\Configs\VMware-UEM-" & sSimpleVer & ".0-GA.lic"
+	End If
+	
+	sFile = "VMware User Environment Manager "& sSimpleVer &" " & sArch & ".msi"
+	
+	
+	sInstallName = "VMware User Environment Manager"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
 	
@@ -83,16 +97,11 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /S")
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart LICENSEFILE=""" & sLicense & """ ADDLOCAL=""FlexEngine"" /l*v """ & sLogPath & """")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success
-		If Not oFSO.FolderExists(sFolder) Then
-		  oFSO.CreateFolder sFolder
-		  oLogging.CreateEntry "Created folder" & sFolder, LogTypeInfo
-		End If
-		oFSO.CopyFile (oUtility.ScriptDir & "\source\ComparePlugin.dll"), (sFolder & "\ComparePlugin.dll"), True
-		
+
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
 	Else 
 		ZTIProcess = Failure

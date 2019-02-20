@@ -1,17 +1,17 @@
-<job id="Install-ActiveClient">
+<job id="Install-Jabber">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript">
  
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-ActiveClient.wsf
+' // File: Install-Jabber.wsf
 ' //
-' // Purpose: This will install ActiveClient
+' // Purpose: This will install Install Cisco Jabber Client
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-ActiveClient.wsf [/arch:x64|x86] [/debug:true]
+' // Usage: cscript Install-Jabber.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
  
@@ -20,7 +20,7 @@
 '//----------------------------------------------------------------------------
 Option Explicit 
 
-Dim iRetVal 
+Dim iRetVal
 
 '//----------------------------------------------------------------------------
 '// Main routine
@@ -36,10 +36,11 @@ On Error Goto 0
 Function ZTIProcess() 
 
 	Dim sVersion,sArch,sFile
+	Dim arySplitVer,sSimpleVer
 	Dim sInstallName, sInstallerPath
-	Dim sPatch, sInstallerPatchPath
 	Dim sLogFolder,sLogName,sLogPath
-	
+	Dim sLicense
+
 	'// Apply Architecture arguments:
 	'// If no argument provided check for MDT/SCCM variable
 	'// If no variable or argument is provided, defualt to x86
@@ -53,16 +54,14 @@ Function ZTIProcess()
 	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "6.2"
+	sVersion = "10.5.2.45439"	
+	
+	sInstallName = "Cisco Jabber"
+	
+	sFile = "Jabber.msi"
 
-	sFile = "ActivClient_CAC_" & sArch & "_"& sVersion &".msi"
-	sPatch = "FIXS1107012_" & sArch & ".msp"
-	
-	sInstallName = "ActivClient"
-	
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
-	sInstallerPatchPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sPatch
-	
+
 	'// Build log path (incase not used in task sequence)
 	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
 		sLogFolder = oEnv("TEMP") & "\AppLogs"
@@ -72,7 +71,7 @@ Function ZTIProcess()
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName
-
+	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
 	
@@ -85,21 +84,45 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ AgreeToLicense=YES /qn /norestart /l*v """ & sLogPath & """")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success
-		oUtility.RunWithHeartbeat("msiexec /p """ & sInstallerPatchPath & """ /qn /norestart")
-		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo		
+		
+		'sUser = "Default"
+		'sConfigPath = oUtility.ScriptDir & "\Configs"
+		'sCiscoUserAppDataPath = "C:\Users\" & sUser & "\AppData\Roaming\Cisco\Unified Communications\Jabber\CSF\Config"
+		'oFSO.CopyFile (sConfigPath & "\service-location.xml"), (sCiscoUserAppDataPath & "\service-location.xml"), True
+		'oLogging.CreateEntry sInstallName & ": Configured Jabber client to: " & sCiscoUserAppDataPath & " ", LogTypeInfo
+	
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
 	End If
-	
-	'// Enable Zone Checks
-	oEnv.Remove("SEE_MASK_NOZONECHECKS")
-	
+
+	'/// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
 End Function 
+
+Function CopyFile(sName,sDestPath)
+
+	If oFSO.fileexists(oUtility.ScriptDir & "\" & sName) Then
+		If Not oFSO.FolderExists(sDestPath) Then
+			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
+			oFSO.CreateFolder sDestPath
+		End If
+		oLogging.CreateEntry "Perparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
+		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
+		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
+		CopyFile=0
+	Else
+		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
+		CopyFile=2
+	End If
+
+End Function
 </script>
 </job>
 

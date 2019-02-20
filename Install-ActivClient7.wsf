@@ -11,34 +11,26 @@
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-ActivClient.wsf [/debug:true]
+' // Usage: cscript Install-ActivClient.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
  
 '//----------------------------------------------------------------------------
-'//
 '// Global constant and variable declarations
-'//
-'//----------------------------------------------------------------------------
- 
+'//---------------------------------------------------------------------------- 
 Option Explicit 
 
 Dim iRetVal 
-'//----------------------------------------------------------------------------
-'// End declarations
-'//----------------------------------------------------------------------------
- 
+
 '//----------------------------------------------------------------------------
 '// Main routine
 '//----------------------------------------------------------------------------
- 
-On Error Resume Next
+'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
 On Error Goto 0 
 
 '//---------------------------------------------------------------------------
-'//
 '// Function: ZTIProcess()
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
@@ -47,19 +39,37 @@ Function ZTIProcess()
 	Dim sInstallName, sInstallerPath
 	Dim sLogFolder,sLogName,sLogPath
 
-	'// Variables
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Variables: 
+	'// Change if needed
 	sVersion = "7.0.2"
-	sArch = "x64"
+	
+	'Apply Arguments
+	If oUtility.Arguments.Exists("Arch") Then
+		sVersion = oUtility.Arguments("Arch")
+	Else
+		sArch = "x64"
+	End If
 	
 	If sArch = "x64" then
-		sFile = "ActivClient x64 "& sVersion &".msi"
+		sFile = "ActivClient " & sArch & " "& sVersion &".msi"
 	Else
-		sFile = "ActivClient x86 "& sVersion &".msi"
+		sFile = "ActivClient " & sArch & " "& sVersion &".msi"
 	End If
 	
 	sInstallName = "ActivClient"
 	
-	sInstallerPath = oUtility.ScriptDir & "\source\" & sVersion & "\" & sFile
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 	
 	'// Build log path (incase not used in task sequence)
 	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
@@ -67,7 +77,7 @@ Function ZTIProcess()
 	Else
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
 	End If
-	oUtility.VerifyPathExists sLogPath
+	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName
 	

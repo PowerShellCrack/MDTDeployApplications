@@ -1,17 +1,17 @@
-<job id="Install-CCTK">
+<job id="Install-DesktopValidator">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-CCTK.wsf
+' // File: Install-DesktopValidator.wsf
 ' //
-' // Purpose: This will install Dell Command and Configure Toolkit
+' // Purpose: This will install Tumbleweed Desktop Validator
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Command.wsf [/version:<version>] [/arch:x64|x86] [/debug:true]
+' // Usage: cscript Install-Command.wsf [/config:<filepath>] [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
@@ -20,24 +20,26 @@
 '//---------------------------------------------------------------------------- 
 Option Explicit 
 
-Dim iRetVal 
+Dim iRetVal
+
 '//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
-On Error Goto 0 
+On Error Goto 0
 
 '//---------------------------------------------------------------------------
 '// Function: ZTIProcess()
 '//---------------------------------------------------------------------------
-Function ZTIProcess() 
+Function ZTIProcess()
 
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
 	Dim sLogFolder,sLogName,sLogPath
-
+	Dim sConfigDate,sConfigFile,sConfigCopyPath,sConfigEXEPath
+	
 	'// Apply Architecture arguments:
 	'// If no argument provided check for MDT/SCCM variable
 	'// If no variable or argument is provided, defualt to x86
@@ -48,23 +50,32 @@ Function ZTIProcess()
 	Else
 		sArch = "x86"
 	End If
+
+	'// Apply Config File arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	If oUtility.Arguments.Exists("config") Then
+		sConfigFile = oUtility.Arguments("config")
+	ElseIf oEnvironment.Exists("DVConfigFile") Then
+		sConfigFile = oEnvironment.Item("DVConfigFile")
+	Else
+		sConfigFile = oUtility.ScriptDir & "\Config\dvConfig_" & sConfigDate & ".txt"
+	End If
 	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "4.1.0.478"
-
-	sFile = "Command_Configure.msi"
+	sVersion = "4.11.0.737"
+	sFile = "DesktopValidator_" & sArch & "_" & sVersion & ".exe"
 	
-	'// Apply version arguments:
-	'// If no argument provided check for MDT/SCCM variable 
-	If oUtility.Arguments.Exists("version") Then
-		sVersion = oUtility.Arguments("version")
-	ElseIf oEnvironment.Exists("CCTKInstallerVersion") Then
-		sVersion = oEnvironment.Item("CCTKInstallerVersion")
-	End if
-
-	sInstallName = "Dell Command and Configure Toolkit"
+	If sArch = "x64" then
+		sConfigEXEPath = oEnv("PROGRAMFILES") & "\Tumbleweed\Desktop Validator\dvconfig.exe"
+	Else
+		sConfigEXEPath =  oEnv("PROGRAMFILESX86") & "\Tumbleweed\Desktop Validator\dvconfig.exe"
+	End If
 	
+	sConfigDate = "28JULY2016"
+	sConfigCopyPath = oEnv("ALLUSERSPROFILE") & "\Tumbleweed"	
+	
+	sInstallName = "Tumbleweed Desktop Validator"
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 	
 	'// Build log path (incase not used in task sequence)
@@ -89,12 +100,21 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn AgreeToLicense=YES RebootYesNo=No /l*v """ & sLogPath & """")
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /S /v""/qn /l*v """ & sLogPath & """""")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success 
-		DeleteFile "C:\Users\Public\Desktop","Dell Command Configure Wizard.lnk"
-		DeleteFile "C:\Users\Public\Desktop","Dell CCTK Configuration Wizard.lnk"
+		
+		DeleteFile "C:\Users\Public\Desktop","TUmbleweed Desktop Validator.lnk"
+		oUtility.VerifyPathExists sConfigCopyPath
+		iRetVal = oUtility.RunWithHeartbeat("""" & sConfigEXEPath & """ -command write -file """ & sConfigFile & """")
+		
+		If sArch = "x64" then
+			oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{0768D7D7-0D13-4740-9684-A42CCF095BA4}\DisplayName", "Tumbleweed Desktop Validator (" & sConfigDate & ")", "REG_SZ"
+		Else
+			oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{0768D7D7-0D13-4740-9684-A42CCF095BA4}\DisplayName", "Tumbleweed Desktop Validator (" & sConfigDate & ")", "REG_SZ"
+		End If
+		
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
 	Else 
 		ZTIProcess = Failure

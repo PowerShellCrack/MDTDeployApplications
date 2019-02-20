@@ -1,0 +1,175 @@
+<job id="Install-DesktopInfo">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-DesktopInfo.wsf
+' //
+' // Purpose: This will install DesktopInfo
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-Command.wsf [/prefix:<prefix>] [/arch:x64|x86] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sPrefix
+	Dim sConfigs,sCopyConfigPath
+	Dim sEXECopyPath,sREGRunPath
+	
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = oUtility.Arguments("arch")
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = oEnvironment.Item("Architecture")
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "1.5"
+
+	sFile = "DesktopInfo.exe"
+	
+	'Apply Arguments
+	If oUtility.Arguments.Exists("prefix") Then
+		sPrefix = oUtility.Arguments("prefix")
+	ElseIf oEnvironment.Exists("Prefix") Then
+		sPrefix = oEnvironment.Item("Prefix")
+	End if
+
+	sInstallName = "DesktopInfo (" & sPrefix & ")"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
+	sConfigs = oUtility.ScriptDir & "\Configs\desktopinfo_" & sPrefix & ".ini"
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	'// copy exe
+	If sArch = "x64" then
+		sEXECopyPath = oEnv("PROGRAMFILES") & "\DesktopInfo"
+	Else
+		sEXECopyPath =  oEnv("PROGRAMFILES(X86)") & "\DesktopInfo"
+	End If
+
+	oUtility.VerifyPathExists sEXECopyPath
+	iRetVal = oUtility.RunWithHeartbeat("cmd.exe /c copy /y """ & sInstallerPath & """ """ & sEXECopyPath & "\" & sFile & """")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		
+		
+		'//Build paths for config
+		sCopyConfigPath = oEnv("ALLUSERSPROFILE") & "\DesktopInfo"
+		'//Build paths for registry run path
+		sREGRunPath = """"& sEXECopyPath & "\" & sFile &""" /ini=""" & sCopyConfigPath & "\desktopinfo.ini"""
+		
+		'//copy config file
+		oUtility.VerifyPathExists sCopyConfigPath
+		iRetVal = oUtility.RunWithHeartbeat("cmd.exe /c copy /y """ & sConfigs & """ """ & sCopyConfigPath & "\desktopinfo.ini""")
+		
+		If (iRetVal = 0) or (iRetVal = 3010) then
+			ZTIProcess = Success 
+			
+			'//Build installer
+			If sArch = "x64" then
+				oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\" & sInstallName, sREGRunPath, "REG_SZ"
+				oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayIcon", sEXECopyPath & "\" & sFile, "REG_SZ"
+				oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayName", sInstallName, "REG_SZ"
+				oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayVersion", sVersion, "REG_SZ"
+				oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\UninstallString", "rmdir /s /q """ & sEXECopyPath& """" & _
+												" && rmdir /s /q """ & sCopyConfigPath & """" & _
+												" && reg delete ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"" /v """ & sInstallName & """ /f" & _
+												" && reg delete ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & """ /f"
+			Else
+				oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run\" & sInstallName, sREGRunPath, "REG_SZ"
+				oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayIcon", sEXECopyPath & "\" & sFile, "REG_SZ"
+				oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayName", sInstallName, "REG_SZ"
+				oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayVersion", sVersion, "REG_SZ"
+				oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\UninstallString", "rmdir /s /q """ & sEXECopyPath& """" & _
+												" && rmdir /s /q """ & sCopyConfigPath & """" & _
+												" && reg delete ""HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"" /v """ & sInstallName & """ /f" & _
+												" && reg delete ""HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & """ /f"
+			End If
+		Else 
+			ZTIProcess = Failure
+			oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+		End If
+
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+</script>
+</job>
+
