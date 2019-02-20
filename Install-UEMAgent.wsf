@@ -1,3 +1,4 @@
+<<<<<<< HEAD:Install-UEMAgent.wsf
 <job id="Install-UEMAgent">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
@@ -151,3 +152,184 @@ End Function
 
 
 
+=======
+<job id="Install-Java64">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-Java.wsf
+' //
+' // Purpose: This will install Java 64-bit
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-Java64.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// End declarations
+'//---------------------------------------------------------------------------- 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//
+'// Input: None
+'// 
+'// Return: Success - 0
+'// Failure - non-zero
+'//
+'// Purpose: Perform main ZTI processing
+'// 
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sType
+	Dim sInstallName, sInstallerPath
+	Dim arySplitVer,sMajVer,sMinVer
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sInstallerConfig
+	
+	'// Variables
+	sVersion = "1.8.0.201"
+	sArch = "x64"
+	sType = "jre"
+
+	arySplitVer = Split(sVersion, ".")
+	sMajVer=arySplitVer(1)
+	sMinVer=arySplitVer(3)
+
+	If sArch = "x64" then
+		sFile = sType & "-" & sMajVer & "u" & sMinVer & "-windows-x64.exe"
+	Else
+		sFile = sType & "-" & sMajVer & "u" & sMinVer & "-windows-i586.exe"
+	End If
+
+	sInstallName = "Java (" & UCase(sType) & ")"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sVersion & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	sInstallerConfig = oUtility.ScriptDir & "\Configs\java.installsettings.cfg"
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	
+	
+	If not oFSO.FileExists(sInstallerConfig) then
+		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /s REMOVEOUTOFDATEJRES=1 /L """ & sLogPath & """")
+	Else
+		oFSO.CopyFile sInstallerConfig, oEnv("TEMP") & "\", True
+		iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ INSTALLCFG=""" & oEnv("TEMP") & "\java.settings.cfg"" /L """ & sLogPath & """")
+	End if
+
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+		'DeleteFolder "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Java"
+		oUtility.VerifyPathExists "C:\WINDOWS\Sun\Java\Deployment"
+		
+		'Copy deployment.config
+		oLogging.CreateEntry "Copying " & oUtility.ScriptDir & "\Configs\deployment.config to C:\WINDOWS\Sun\Java\Deployment", LogTypeVerbose		
+		oFSO.CopyFile oUtility.ScriptDir & "\Configs\deployment.config", "C:\WINDOWS\Sun\Java\Deployment\", True
+		
+		'Copy deployment.properties
+		If not oFSO.FileExists(oUtility.ScriptDir & "\Configs\deployment_"& sPrefix & ".properties") then
+			oFSO.CopyFile oUtility.ScriptDir & "\Configs\deployment.properties", "C:\WINDOWS\Sun\Java\Deployment\", True
+		Else
+			oFSO.CopyFile oUtility.ScriptDir & "\Configs\deployment_"& sPrefix & ".properties", "C:\WINDOWS\Sun\Java\Deployment\", True
+		End If
+		
+		'Copy exception.sites
+		If not oFSO.FileExists(oUtility.ScriptDir & "\Configs\exception_"& sPrefix & ".sites") then
+			oFSO.CopyFile oUtility.ScriptDir & "\Configs\exception.sites", "C:\WINDOWS\Sun\Java\Deployment\", True
+		Else
+			oFSO.CopyFile oUtility.ScriptDir & "\Configs\exception_"& sPrefix & ".sites", "C:\WINDOWS\Sun\Java\Deployment\", True
+		End If
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+Function DeleteFolder(sPath)
+
+	On error resume next
+	Dim strPath
+	strPath = sPath
+	If oFSO.FolderExists(strPath) Then
+		oLogging.CreateEntry "Folder Found: " & strPath, LogTypeInfo
+		oFSO.DeleteFolder strPath,0
+		oLogging.CreateEntry "Folder Deleted: " & strPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "Folder Not Found: " & strPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>>>>>> 6df9e118f2df46e9cdd0b096af0f122b3433612a:Install-Java64.wsf

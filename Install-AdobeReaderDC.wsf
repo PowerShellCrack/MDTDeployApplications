@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <job id="Install-AdobeReaderDC">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript">
@@ -292,3 +293,288 @@ End Function
 
 
 
+=======
+<job id="Install-AdobeReaderDC">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript">
+ 
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-AdobeReader.wsf
+' //
+' // Purpose: This will install Adobe Actobat Reader DC
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-AdobeReaderDC.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'//
+'// Global constant and variable declarations
+'//
+'//----------------------------------------------------------------------------
+ 
+Option Explicit 
+
+Dim iRetVal 
+'//----------------------------------------------------------------------------
+'// End declarations
+'//----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'// Main routine
+'//----------------------------------------------------------------------------
+ 
+On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'//
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sNoDotVersion,sTrimVersion
+	Dim sPatch, sTransform, sInstallerPatchPath, sInstallerTransform
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sShortName,sRegCmd
+	Dim xmlDoc, objNode
+	
+	'// Variables
+	sVersion = "2019.010.20069"
+	sArch = "x86"
+	sFile = "AcroRead.msi"
+	sShortName = "ReaderDC"
+	
+	' Adobe update file name has no dots and the first 2 digits are removed
+	sNoDotVersion = Replace(sVersion,".","")
+	sTrimVersion = Right(sNoDotVersion, Len(sNoDotVersion) - 2)
+	sPatch = "AcroRdrDCUpd" & sTrimVersion & ".msp"
+	sTransform = "AcrobatReaderDC.mst"
+	
+	sInstallName = " Adobe Acrobat Reader DC"
+	
+	sInstallerPath = oUtility.ScriptDir & "\source\" & sFile
+
+	sInstallerPatchPath = oUtility.ScriptDir & "\source\" & sVersion & "\AcroRdrDCUpd" & sTrimVersion & ".msp"
+	sInstallerTransform = oUtility.ScriptDir & "\source\" & sTransform
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	Else
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ TRANSFORMS=""" & sInstallerTransform & """ REBOOT=REALLYSUPPRESS EULA_ACCEPT=YES /qn /norestart /l*v """ & sLogPath & """")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+		oUtility.RunWithHeartbeat("msiexec /p """ & sInstallerPatchPath & """ /qn /norestart")
+		DeleteFile "C:\Users\Public\Desktop","Acrobat Reader DC.lnk"
+		
+		Dim sDefaultXMLPath,sDefaultXSLPath
+		sDefaultXMLPath = oEnv("TEMP") & "\Default_Assoc_" & sShortName & ".XML"
+		sDefaultXSLPath = (oUtility.ScriptDir & "\Configs\indent.xsl")
+		
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\File_Assoc_" & sShortName & ".XML"), oEnv("TEMP") & "\", True
+		oUtility.RunWithConsoleLogging("Dism.exe /online /Export-DefaultAppAssociations:""" & sDefaultXMLPath & """")
+
+		' Create an xml Documment object and load your file
+		Set xmlDoc = CreateObject("Microsoft.XMLDOM")
+		'Set xmlDoc = CreateObject("Msxml2.DOMDocument")
+		xmlDoc.Async = "False"
+		xmlDoc.Load sDefaultXMLPath
+
+		Set objNode = xmlDoc.selectNodes("//DefaultAssociations/Association") 
+		Dim x
+		for each x in objNode
+			if x.Attributes.getNamedItem("Identifier").Text = ".pdf" then
+				oLogging.CreateEntry "Found Identifier = "".pdf""", LogTypeInfo	
+				x.setAttribute "ProgId", "AcroExch.Document.DC"
+				x.setAttribute "ApplicationName", sInstallName
+			End If
+		Next
+		
+		'create new asscocations
+		Dim newNode,newLineNode
+		Set objNode = xmlDoc.selectNodes("//DefaultAssociations")
+		
+		NewNodewithThreeAttributes xmlDoc, "Association", "Identifier",".pdfxml","ProgId","AcroExch.pdfxml","ApplicationName", sInstallName
+		NewNodewithThreeAttributes xmlDoc, "Association", "Identifier", ".acrobatsecuritysettings", "ProgId", "AcroExch.acrobatsecuritysettings", "ApplicationName", sInstallName
+		NewNodewithThreeAttributes xmlDoc, "Association", "Identifier", ".fdf", "ProgId", "AcroExch.FDFDoc", "ApplicationName", sInstallName
+		NewNodewithThreeAttributes xmlDoc, "Association", "Identifier", ".xfdf", "ProgId", "AcroExch.XFDFDoc", "ApplicationName", sInstallName
+		NewNodewithThreeAttributes xmlDoc, "Association", "Identifier", ".xdp", "ProgId", "AcroExch.XDPDoc", "ApplicationName", sInstallName
+		NewNodewithThreeAttributes xmlDoc, "Association", "Identifier", ".pdx", "ProgId", "PDXFileType", "ApplicationName", sInstallName
+		NewNodewithThreeAttributes xmlDoc, "Association", "Identifier", ".api", "ProgId", "AcroExch.Plugin", "ApplicationName", sInstallName
+		NewNodewithThreeAttributes xmlDoc, "Association", "Identifier", ".secstore", "ProgId", "AcroExch.SecStore", "ApplicationName", sInstallName
+		
+		' Save the changes
+		xmlDoc.Save sDefaultXMLPath
+		
+		' Clean up
+		If Not objNode Is Nothing Then
+			Set objNode = Nothing
+		End If
+		
+		Set xmlDoc = Nothing
+
+
+		'Load XSL
+		Dim strOutputFile,objInputFile, objOutputFile, strXML
+		
+		strOutputFile = oEnv("TEMP") & "\Default_Assoc_" & sShortName & "_Formatted.XML"
+		
+		Dim objXML,objXSL
+		Set objXML = CreateObject("Msxml2.DOMDocument")
+		Set objXSL = CreateObject("Msxml2.DOMDocument")
+		
+		' Put whitespace between tags. (Required for XSL transformation.)
+		Set objInputFile = oFSO.OpenTextFile(sDefaultXMLPath,1,False,-2)
+		Set objOutputFile = oFSO.CreateTextFile(strOutputFile,True,False)
+		strXML = objInputFile.ReadAll
+		strXML = Replace(strXML,"><",">" & vbCrLf & "<")
+		objOutputFile.Write strXML
+		objInputFile.Close
+		objOutputFile.Close
+		
+		' Create an XSL stylesheet for transformation.
+		Dim strStylesheet : strStylesheet = _
+		"<xsl:stylesheet version=""1.0"" xmlns:xsl=""http://www.w3.org/1999/XSL/Transform"">" & _
+		"<xsl:output method=""xml"" indent=""yes""/>" & _
+		"<xsl:template match=""/"">" & _
+		"<xsl:copy-of select="".""/>" & _
+		"</xsl:template>" & _
+		"</xsl:stylesheet>"
+		
+		objXSL.loadXML strStylesheet
+		objXML.load strOutputFile
+		objXML.transformNode objXSL
+		objXML.save strOutputFile
+		
+		' Apply file association
+		oUtility.RunWithConsoleLogging("dism.exe /online /Import-DefaultAppAssociations:""" & strOutputFile & """ /LogPath:""" & sLogFolder & "\AdobeReaderDC_SetAssoc_DISM.log""")
+		
+			
+		sRegCmd = "cmd.exe /c " & oEnv("SystemRoot") & "\regedit.exe"
+		sRegCmd = sRegCmd & " /s """ & oUtility.ScriptDir & "\Configs\settings_" & sShortName & "_" & sArch & ".reg"""
+		'oShell.Run(sRegCmd, 0, true)
+		oUtility.RunWithConsoleLogging sRegCmd
+		
+		sRegCmd = sRegCmd & " /s """ & oUtility.ScriptDir & "\Configs\lockdown_" & sShortName & ".reg"""
+		oUtility.RunWithConsoleLogging sRegCmd
+		
+		oShell.RegWrite "HKCU\SOFTWARE\Adobe\Acrobat Reader\DC\AdobeViewer\EULA", 1, "REG_DWORD"
+		oShell.RegWrite "HKCU\SOFTWARE\Adobe\Acrobat Reader\DC\Security\cDigSig\cEUTLDownload\bLoadSettingsFromURL", 1, "REG_DWORD"
+		oShell.RegWrite "HKCU\SOFTWARE\Adobe\Acrobat Reader\DC\Security\cDigSig\cAdobeDownload\bLoadSettingsFromURL", 1, "REG_DWORD"
+		oShell.RegWrite "HKCU\SOFTWARE\Adobe\Acrobat Reader\DC\AVGeneral\bFIPSMode", 1, "REG_DWORD"
+		
+		iRetVal = oUtility.RunWithHeartbeat("reg load ""HKU\Temp"" """ & oEnv("SystemDrive") & "\Users\Default\NTUSER.DAT""")
+		
+		oShell.RegWrite "HKU\Temp\SOFTWARE\Adobe\Acrobat Reader\DC\AdobeViewer\EULA", 1, "REG_DWORD"
+		oShell.RegWrite "HKU\Temp\SOFTWARE\Adobe\Acrobat Reader\DC\Security\cDigSig\cEUTLDownload\bLoadSettingsFromURL", 1, "REG_DWORD"
+		oShell.RegWrite "HKU\Temp\SOFTWARE\Adobe\Acrobat Reader\DC\Security\cDigSig\cAdobeDownload\bLoadSettingsFromURL", 1, "REG_DWORD"
+		oShell.RegWrite "HKU\Temp\SOFTWARE\Adobe\Acrobat Reader\DC\AVGeneral\bFIPSMode", 1, "REG_DWORD"
+		
+		oShell.Run "reg unload HKU\Temp", 0, true
+		
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+	
+End Function
+
+Sub NewNodewithThreeAttributes(objDom, nodeName, attribName1, attribValue1, attribName2, attribValue2, attribName3, attribValue3)
+	Dim newNode,newLineNode
+	
+	'build new node
+	Set newNode = objDom.CreateElement(nodeName)
+	
+	'add 3 sttributes
+	AddNodeAttribute objDom, newNode, attribName1, attribValue1
+	AddNodeAttribute objDom, newNode, attribName2, attribValue2 
+	AddNodeAttribute objDom, newNode, attribName3, attribValue3
+	
+	'add new line
+	Set newLineNode = objDom.createTextNode(vbCrLf)
+	'newNode.appendChild(newLineNode)
+End Sub
+
+Sub AddNodeAttribute(objDom, objNode, strName, strValue)
+	Dim objAttrib
+
+	Set objAttrib = objDOM.createAttribute(strName)
+	objAttrib.Text =strValue
+	objNode.Attributes.setNamedItem objAttrib
+	objDOM.documentElement.appendChild objNode
+
+End Sub
+
+Function CopyFile(sName,sDestPath)
+	If oFSO.FileExists(oUtility.ScriptDir & "\" & sName) Then
+		If Not oFSO.FolderExists(sDestPath) Then
+			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
+			oFSO.CreateFolder sDestPath
+		End If
+		oLogging.CreateEntry "Preparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
+		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
+		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
+		CopyFile=0
+	Else
+		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
+		CopyFile=2
+	End If
+
+End Function
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+
+</script>
+</job>
+
+
+
+
+
+
+>>>>>>> 6df9e118f2df46e9cdd0b096af0f122b3433612a
