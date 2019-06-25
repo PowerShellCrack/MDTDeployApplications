@@ -1,0 +1,189 @@
+<job id="Install-WebApp">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-WebApp.wsf
+' //
+' // Purpose: This will install Web App Link
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-WebApp.wsf [/WebAppURL:<URL>] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sPrefix
+	Dim sICOCopyPath,sREGRunPath
+	Dim oLink,sLink
+	Dim sProgramFilesx86Path,sSystemx86Path,sCapicomPath
+	
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = LCase(oUtility.Arguments("arch"))
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = LCase(oEnvironment.Item("Architecture"))
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Apply EZTV URL Arguments:
+	If oUtility.Arguments.Exists("WebAppURL") Then
+		sLink = oUtility.Arguments("WebAppURL")
+	ElseIf oEnvironment.Exists("WebAppURL") Then 
+		sLink = oEnvironment.Item("WebAppURL")
+	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "8.1.6"
+
+	sFile = "fdd.ico"
+	
+	sInstallName = "WebApp Web Client"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	'// copy exe
+	sICOCopyPath = oEnv("ALLUSERSPROFILE") & "\" & sInstallName 
+
+	oUtility.VerifyPathExists sICOCopyPath
+	iRetVal = oUtility.RunWithHeartbeat("cmd.exe /c copy /y """ & sInstallerPath & """ """ & sICOCopyPath & "\" & sFile & """")
+	
+	If (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		
+		If sArch = "x64" then
+			sProgramFilesx86Path = oEnv("PROGRAMFILES(X86)")
+			sSystemx86Path = "SysWOW64"
+		Else
+			sProgramFilesx86Path = oEnv("PROGRAMFILES")
+			sSystemx86Path = "System32"
+		End If	
+		
+		' check if Capicom is installed
+		If oFSO.FileExists(sProgramFilesx86Path & "\Microsoft CAPICOM 2.1.0.2\Lib\X86\capicom.dll") Then
+			sCapicomPath = sProgramFilesx86Path & "\Microsoft CAPICOM 2.1.0.2\Lib\X86\capicom.dll" 		
+		'check if capicom.dll exists
+		ElseIf oFSO.FileExists(oEnv("SYSTEMROOT") & "\" & sSystemx86Path & "\capicom.dll") Then
+			sCapicomPath = oEnv("SYSTEMROOT") & "\" & sSystemx86Path & "\capicom.dll"
+		Else
+			oUtility.RunWithHeartbeat("cmd.exe /c copy /y """ & oUtility.ScriptDir & "\Source\capicom.dll"" """ & oEnv("SYSTEMROOT") & "\" & sSystemx86Path & "\capicom.dll"" ")
+			sCapicomPath = oEnv("SYSTEMROOT") & "\" & sSystemx86Path & "\capicom.dll"
+		End If
+		
+		oUtility.RunWithHeartbeat(oEnv("SYSTEMROOT") & "\" & sSystemx86Path & "\regsvr32.exe /s """ & sCapicomPath & """")
+		
+		'//Build installer
+		If sArch = "x64" then
+			oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayIcon", sICOCopyPath & "\" & sFile, "REG_SZ"
+			oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayName", sInstallName, "REG_SZ"
+			oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayVersion", sVersion, "REG_SZ"
+			oShell.RegWrite "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\UninstallString", "rmdir /s /q """ & sICOCopyPath& """" & _
+											" && del /s /q """ & oEnv("AllUsersDesktop") & "\" & sInstallName & ".lnk" & """" & _
+											" && reg delete ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & """ /f"
+		Else
+			oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayIcon", sICOCopyPath & "\" & sFile, "REG_SZ"
+			oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayName", sInstallName, "REG_SZ"
+			oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\DisplayVersion", sVersion, "REG_SZ"
+			oShell.RegWrite "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & "\UninstallString", "rmdir /s /q """ & sICOCopyPath & """" & _
+											" && del /s /q """ & oEnv("AllUsersDesktop") & "\" & sInstallName & ".lnk" & """" & _
+											" && reg delete ""HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName & """ /f"
+		End If
+		
+		if sLink <> "" Then
+			Set oLink = oShell.CreateShortcut(oShell.SpecialFolders("AllUsersDesktop") & "\" & sInstallName & ".lnk")
+			
+			If sArch = "x64" then
+				oLink.TargetPath = oEnv("PROGRAMFILES") & "\Internet Explorer\iexplore.exe"
+			Else
+				oLink.TargetPath = oEnv("PROGRAMFILES(X86)") & "\Internet Explorer\iexplore.exe"	
+			End If
+			
+			oLink.IconLocation = sICOCopyPath & "\" & sFile
+			oLink.Arguments = sLink
+			oLink.Save
+
+			oLogging.CreateEntry "Shortcut """ & oShell.SpecialFolders("AllUsersDesktop") & "\" & sInstallName & ".lnk"" created.", LogTypeInfo
+		End If	
+		
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+
+	oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+
+	
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+</script>
+</job>
+

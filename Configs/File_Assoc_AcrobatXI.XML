@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DefaultAssociations>
+	<Association Identifier=".pdf" ProgID="Acrobat.Document.11" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".pdfxml" ProgID="Acrobat.pdfxml" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".acrobatsecuritysettings" ProgID="Acrobat.acrobatsecuritysettings" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".fdf" ProgID="Acrobat.FDFDoc" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".xfdf" ProgID="Acrobat.XFDFDoc" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".xdp" ProgID="Acrobat.XDPDoc" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".pdx" ProgID="PDXFileType" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".api" ProgID="Acrobat.Plugin" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".secstore" ProgID="Acrobat.SecStore" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".sequ" ProgID="Acrobat.Sequence" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".rmf" ProgID="Acrobat.RMFFile" ApplicationName="Adobe Acrobat XI" />
+	<Association Identifier=".bpdx" ProgID="AcrobatBPDXFileType" ApplicationName="Adobe Acrobat XI" />
+</DefaultAssociations>
+
+

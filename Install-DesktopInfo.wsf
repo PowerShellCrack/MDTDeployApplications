@@ -11,7 +11,7 @@
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Command.wsf [/prefix:<prefix>] [/arch:x64|x86] [/debug:true]
+' // Usage: cscript Install-DesktopInfo.wsf [/prefix:<prefix>] [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
@@ -46,18 +46,12 @@ Function ZTIProcess()
 	'If no argument provided check for MDT/SCCM variable
 	'If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
-	
-	'// Variables: 
-	'// Change if needed
-	sVersion = "1.5"
-
-	sFile = "DesktopInfo.exe"
 	
 	'Apply Arguments
 	If oUtility.Arguments.Exists("prefix") Then
@@ -66,18 +60,23 @@ Function ZTIProcess()
 		sPrefix = oEnvironment.Item("Prefix")
 	End if
 
+	'// Variables: 
+	'// Change if needed
+	sVersion = "1.5"
+
+	sFile = "DesktopInfo.exe"
+	
 	sInstallName = "DesktopInfo (" & sPrefix & ")"
 	
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
-	sConfigs = oUtility.ScriptDir & "\Configs\desktopinfo_" & sPrefix & ".ini"
+	sConfigs = oUtility.ScriptDir & "\Configs\" & sPrefix & "\desktopinfo.ini"
 	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
-	
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName

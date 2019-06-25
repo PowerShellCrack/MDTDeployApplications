@@ -38,14 +38,15 @@ Function ZTIProcess()
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
 	Dim sLogFolder,sLogName,sLogPath
+	Dim sADDLOCALArgs
 	
 	'// Apply Architecture arguments:
 	'If no argument provided check for MDT/SCCM variable
 	'If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
@@ -65,10 +66,10 @@ Function ZTIProcess()
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
 	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
@@ -85,8 +86,11 @@ Function ZTIProcess()
 	
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
 
-	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /s /v""/qn /norestart VDM_VC_MANAGED_AGENT=1 VDM_FIPS_ENABLED=0 INSTALL_VDISPLAY_DRIVER=1 VDM_FLASH_URL_REDIRECTION=1 ADDLOCAL=""Core,ThinPrint,NGVC,FlashURLRedirection,RTAV,VmVideo,SmartCard,RDSH3D,HTML5MMR"" /l*v """ & sLogPath & """""")
+	sADDLOCALArgs = "Core,NGVC,RTAV,ThinPrint,FlashURLRedirection,SmartCard,USB,VmwVaudio,VmwVdisplay,VmVideo,FLASHMMR,HTML5MMR"
+	'sADDLOCALArgs = "VmVideo,VmwVdisplay,NGVC,SmartCard,TSMMR,ThinPrint,VmwVaudio,RDP,BlastProtocol,Core,ClientDriveRedirection,FlashURLRedirection,RTAV,FLASHMMR,HTML5MMR"
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /s /norestart /v""/qn VDM_VC_MANAGED_AGENT=1 VDM_FIPS_ENABLED=0 INSTALL_VDISPLAY_DRIVER=1 VDM_FLASH_URL_REDIRECTION=1 VDM_IP_PROTOCOL_USAGE=IPv4 ADDLOCAL=""" & sADDLOCALArgs & """ REBOOT=ReallySuppress /l*v """ & sLogPath & """""")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success 

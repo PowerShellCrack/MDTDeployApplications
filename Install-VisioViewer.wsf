@@ -1,0 +1,108 @@
+<job id="Install-VisioViewer">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript">
+ 
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-VisioViewer.wsf
+' //
+' // Purpose: This will install Microsoft Visio Viewer 2016
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-VisioViewer.wsf [/arch:x64|x86] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+ 
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//----------------------------------------------------------------------------
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//----------------------------------------------------------------------------
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sType
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sVCRedistFile 
+
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = LCase(oUtility.Arguments("arch"))
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = LCase(oEnvironment.Item("Architecture"))
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "16.0.4339.1001"
+	
+	sFile = "vviewer.msi"
+	
+	sInstallName = "Microsoft Visio Viewer 2016"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sArch & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
+
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo  	
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+</script>
+</job>
+
+
+
+
+

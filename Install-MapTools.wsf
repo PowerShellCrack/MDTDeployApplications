@@ -1,0 +1,117 @@
+<job id="Install-MapTools">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-MapTools.wsf
+' //
+' // Purpose: This will install MapTools
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-MapTools.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sFile,sArch
+	Dim sInstallName, sInstallerPath
+	Dim sProfile,bLoadHive
+	Dim sLogFolder,sLogName,sLogPath
+	Dim arySplitVer,sMainVer,sBuildVer
+	Dim sInstalledPath
+	
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	sArch = "x86"
+
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "4.1.9575.0dd7512a"
+	
+	arySplitVer = Split(sVersion, ".")
+	sMainVer=arySplitVer(0) & "." & arySplitVer(1) & "." & arySplitVer(2)
+	sBuildVer=arySplitVer(3)
+	
+	sFile = "Replay " & sVersion & " Installer Bootstrapper.exe"
+	sFile = "Replay " & sVersion & " Installer.msi"
+	
+	sInstallName = "Map Tools"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sMainVer & "\" & sFile
+
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	sInstalledPath = "C:\Program Files (x86)\MapTools Design\Replay\Bin"	
+	
+	iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Prereqs\CPlus2010\vcredist_x64.exe"" /q /norestart /log """ & Replace(sLogPath,sLogName,"MapTools_CPlus2010.htm") & """")
+	iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Prereqs\CPlus2012\vcredist_x64.exe"" /install /quiet /norestart /log """ & Replace(sLogPath,sLogName,"MapTools_CPlus2012.log") & """")
+	iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Prereqs\AccessDatabaseEngine_x64.exe"" /quiet")
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & oUtility.ScriptDir & "\Prereqs\Offline_Customized_VirtualEarth3D64.msi"" /qn /norestart /l*v """ & Replace(sLogPath,sLogName,"MapTools_VirtualEarth3D64.log") & """")
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & oUtility.ScriptDir & "\Prereqs\DirectX.msi"" /qn /norestart /l*v """ & Replace(sLogPath,sLogName,"MapTools_DirectX.log") & """")
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & oUtility.ScriptDir & "\Prereqs\vc_runtimeMinimum_x64.msi"" /qn /norestart /l*v """ & Replace(sLogPath,sLogName,"MapTools_vc_runtimeMinimum_x64.log") & """")
+
+	'iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /quiet /install /ACCEPT_EULA=1")
+	
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ ALLUSERS=""1"" ARPSYSTEMCOMPONENT=""1"" BYPASSLAUNCHCONDITIONS=""1"" /qn /norestart /l*v """ & sLogPath & """")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+		'load license
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\license.lic"), (sInstalledPath & "\license.lic"), True
+		
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+</script>
+</job>
+

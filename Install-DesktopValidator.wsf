@@ -11,7 +11,7 @@
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Command.wsf [/config:<filepath>] [/arch:x64|x86] [/debug:true]
+' // Usage: cscript Install-DesktopValidator.wsf [/config:<filepath>] [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
@@ -44,9 +44,9 @@ Function ZTIProcess()
 	'// If no argument provided check for MDT/SCCM variable
 	'// If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
@@ -58,13 +58,14 @@ Function ZTIProcess()
 	ElseIf oEnvironment.Exists("DVConfigFile") Then
 		sConfigFile = oEnvironment.Item("DVConfigFile")
 	Else
-		sConfigFile = oUtility.ScriptDir & "\Config\dvConfig_" & sConfigDate & ".txt"
+		sConfigFile = oUtility.ScriptDir & "\Configs\dvConfig_" & sConfigDate & ".txt"
 	End If
 	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "4.11.0.737"
-	sFile = "DesktopValidator_" & sArch & "_" & sVersion & ".exe"
+	sVersion = "4.12.0"
+	'sFile = "DesktopValidator_" & sArch & "_" & sVersion & ".exe"
+	sFile = "Desktop_Validator_" & sVersion & "_Install_Enterprise_win-x86-64_BN118.exe"
 	
 	If sArch = "x64" then
 		sConfigEXEPath = oEnv("PROGRAMFILES") & "\Tumbleweed\Desktop Validator\dvconfig.exe"
@@ -79,10 +80,10 @@ Function ZTIProcess()
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")

@@ -1,0 +1,172 @@
+R<job id="Install-MIM">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript">
+ 
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-AdobeReader.wsf
+' //
+' // Purpose: This will install Microsoft Identity Manager
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-MIM.wsf [/arch:x64|x86] [/RMSURL:<URL>] [/RegPortalURL:<URL>] [/Email:<name>@<fqdn>] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sNoDotVersion,sTrimVersion
+	Dim sPatch, sInstallerPatchPath
+	Dim sRMSURL, sRegPortalURL,sRMSEMAIL
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sRegCmd
+	Dim xmlDoc, objNode
+	
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = LCase(oUtility.Arguments("arch"))
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = LCase(oEnvironment.Item("Architecture"))
+	Else
+		sArch = "x86"
+	End If
+	
+	If oUtility.Arguments.Exists("RMSURL") Then
+		sRMSURL = LCase(oUtility.Arguments("RMSURL"))
+	ElseIf oEnvironment.Exists("MIM_RMSLOCATION") Then
+		sRMSURL = LCase(oEnvironment.Item("MIM_RMSLOCATION"))
+	Else
+		sRMSURL = ""
+	End If
+	
+	If oUtility.Arguments.Exists("RegPortalURL") Then
+		sRegPortalURL = LCase(oUtility.Arguments("RegPortalURL"))
+	ElseIf oEnvironment.Exists("MIM_REGPORTALURL") Then
+		sRegPortalURL = LCase(oEnvironment.Item("MIM_REGPORTALURL"))
+	Else
+		sRegPortalURL = ""
+	End If
+	
+	If oUtility.Arguments.Exists("Email") Then
+		sRMSEMAIL = LCase(oUtility.Arguments("Email"))
+	ElseIf oEnvironment.Exists("MIM_RMSEMAIL") Then
+		sRMSEMAIL = LCase(oEnvironment.Item("MIM_RMSEMAIL"))
+	Else
+		sRMSEMAIL = ""
+	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "4.4.1642.0"
+
+	sFile = "Add-ins and extensions.msi"
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
+	
+	sPatch = "FIMAddinsExtensions_" & sArch & "_KB4021562.msp"
+	sInstallerPatchPath = oUtility.ScriptDir & "\Source\" & sPatch 
+	
+	sInstallName = "Microsoft Identity Manager Agent"
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ ACCEPT_EULA=1 ADDLOCAL=PasswordClient MONITORED_EMAIL=""" & sRMSEMAIL & """ RMS_LOCATION=""" & sRMSURL & """ REGISTRATION_PORTAL_URL=""" & sRegPortalURL & """ PORTAL_PREFIX=https PORTAL_LOCATION=""" & sRMSURL & """ REBOOT=ReallySupress /qn /l*v """ & sLogPath & """")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+		oUtility.RunWithHeartbeat("msiexec /update """ & sInstallerPatchPath & """ /qn /norestart")
+		
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+	
+End Function
+
+Function CopyFile(sName,sDestPath)
+	If oFSO.FileExists(oUtility.ScriptDir & "\" & sName) Then
+		If Not oFSO.FolderExists(sDestPath) Then
+			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
+			oFSO.CreateFolder sDestPath
+		End If
+		oLogging.CreateEntry "Preparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
+		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
+		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
+		CopyFile=0
+	Else
+		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
+		CopyFile=2
+	End If
+
+End Function
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+
+</script>
+</job>
+
+
+
+
+
+

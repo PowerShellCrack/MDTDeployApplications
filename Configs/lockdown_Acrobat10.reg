@@ -1,0 +1,18 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Adobe\Adobe Acrobat\10.0\FeatureLockDown]
+"bUsageMeasurement"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Adobe\Adobe Acrobat\10.0\FeatureLockDown\cDefaultExecMenuItems]
+"tWhiteList"="Close|GeneralInfo|Quit|FirstPage|PrevPage|NextPage|LastPage|ActualSize|FitPage|FitWidth|FitHeight|SinglePage|OneColumn|TwoPages|TwoColumns|ZoomViewIn|ZoomViewOut|ShowHideBookmarks
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Adobe\Adobe Acrobat\10.0\FeatureLockDown\cDefaultLaunchAttachmentPerms]
+"tBuiltInPermList"="version:1|.ade:3|.adp:3|.app:3|.arc:3|.arj:3|.asp:3|.bas:3|.bat:3|.bz:3|.bz2:3|.cab:3|.chm:3|.class:3|.cmd:3|.com:3|.command:3|.cpl:3|.crt:3|.csh:3|.desktop:3|.dll:3|.exe:3|.fxp:3|.gz:3|.hex:3
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Adobe\Adobe Acrobat\10.0\FeatureLockDown\cDefaultLaunchURLPerms]
+"tFlashContentSchemeWhiteList"="http|https|ftp|rtmp|rtmpe|rtmpt|rtmpte|rtmps|mailto"
+"tSponsoredContentSchemeWhiteList"="http|https"
+"tSchemePerms"="version:2|shell:3|hcp:3|ms-help:3|ms-its:3|ms-itss:3|its:3|mk:3|mhtml:3
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Adobe\Adobe Acrobat\10.0\FeatureLockDown\cJavaScriptPerms]
+"tBlackList"="Doc.exportXFAData|Util.CharToByte"

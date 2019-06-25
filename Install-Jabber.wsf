@@ -1,30 +1,29 @@
 <job id="Install-Jabber">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
-<script language="VBScript">
- 
+<script language="VBScript"> 
+
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
 ' // File: Install-Jabber.wsf
 ' //
-' // Purpose: This will install Install Cisco Jabber Client
+' // Purpose: This will install Cisco Jabber Video for TelePresence
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Jabber.wsf [/arch:x64|x86] [/debug:true]
+' // Usage: cscript Install-Jabber.wsf [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
- 
+
 '//----------------------------------------------------------------------------
 '// Global constant and variable declarations
-'//----------------------------------------------------------------------------
+'//---------------------------------------------------------------------------- 
 Option Explicit 
 
-Dim iRetVal
-
+Dim iRetVal 
 '//----------------------------------------------------------------------------
 '// Main routine
-'//----------------------------------------------------------------------------
+'//---------------------------------------------------------------------------- 
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
@@ -36,37 +35,27 @@ On Error Goto 0
 Function ZTIProcess() 
 
 	Dim sVersion,sArch,sFile
-	Dim arySplitVer,sSimpleVer
 	Dim sInstallName, sInstallerPath
 	Dim sLogFolder,sLogName,sLogPath
-	Dim sLicense
 
-	'// Apply Architecture arguments:
-	'// If no argument provided check for MDT/SCCM variable
-	'// If no variable or argument is provided, defualt to x86
-	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
-	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
-	Else
-		sArch = "x86"
-	End If
+	sArch = "x86"
+
 	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "10.5.2.45439"	
-	
-	sInstallName = "Cisco Jabber"
-	
-	sFile = "Jabber.msi"
+	sVersion = "4.8.12"
 
+	sFile = "JabberVideo.msi"
+	
+	sInstallName = "Cisco Jabber Video for TelePresence"
+	
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
-
+	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
@@ -84,42 +73,33 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ AgreeToLicense=YES /qn /norestart /l*v """ & sLogPath & """")
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /NORESTART AgreeToLicense=Yes FORCEDFIPSMODE=True /l*v """ & sLogPath & """")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
-		ZTIProcess = Success
-		
-		'sUser = "Default"
-		'sConfigPath = oUtility.ScriptDir & "\Configs"
-		'sCiscoUserAppDataPath = "C:\Users\" & sUser & "\AppData\Roaming\Cisco\Unified Communications\Jabber\CSF\Config"
-		'oFSO.CopyFile (sConfigPath & "\service-location.xml"), (sCiscoUserAppDataPath & "\service-location.xml"), True
-		'oLogging.CreateEntry sInstallName & ": Configured Jabber client to: " & sCiscoUserAppDataPath & " ", LogTypeInfo
-	
+		ZTIProcess = Success 
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
 	End If
-
-	'/// Enable Zone Checks
+	
+	
+	'// Enable Zone Checks
 	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
 
 End Function 
 
-Function CopyFile(sName,sDestPath)
+Function DeleteFile(sPath, sName)
 
-	If oFSO.fileexists(oUtility.ScriptDir & "\" & sName) Then
-		If Not oFSO.FolderExists(sDestPath) Then
-			oLogging.CreateEntry "Created Directory: " & sDestPath, LogTypeInfo
-			oFSO.CreateFolder sDestPath
-		End If
-		oLogging.CreateEntry "Perparing to copy " & oUtility.ScriptDir & "\" & sName, LogTypeInfo
-		oFSO.CopyFile oUtility.ScriptDir  & "\" & sName, sDestPath, True
-		oLogging.CreateEntry "The file " & sName & " was copied to " & sDestPath, LogTypeInfo
-		CopyFile=0
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
 	Else
-		oLogging.CreateEntry "Failed to find : " & oUtility.ScriptDir  & "\" & sName, LogTypeERROR
-		CopyFile=2
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
 	End If
 
 End Function

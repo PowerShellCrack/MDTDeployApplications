@@ -37,35 +37,48 @@ Function ZTIProcess()
 
 	Dim sInstallName,sVersion
 	Dim sFile, sInstallerPath,sArch
-	Dim sFolder
+	Dim sPluginsPath,sThemesPath
+	Dim sLogFolder,sLogName,sLogPath
 	
 	'// Apply Architecture arguments:
 	'If no argument provided check for MDT/SCCM variable
 	'If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
 	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "7.6.3"
+	sVersion = "7.7.1"
 	
 	If sArch = "x64" then
 		sFile = "npp." & sVersion & ".Installer.x64.exe"
-		sFolder = "C:\Program Files\Notepad++\plugins\ComparePlugin"
+		sPluginsPath = "C:\Program Files\Notepad++\plugins\ComparePlugin"
+		sThemesPath = "C:\Program Files\Notepad++\themes"
 	Else
 		sFile = "npp." & sVersion & ".Installer.exe"
-		sFolder = "C:\Program Files (x86)\Notepad++\plugins\ComparePlugin"
+		sPluginsPath = "C:\Program Files (x86)\Notepad++\plugins\ComparePlugin"
+		sThemesPath = "C:\Program Files (x86)\Notepad++\themes"
 	End If
 	
 	sInstallName = "Notepad++"
 	
-	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
-
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
 	
@@ -82,11 +95,18 @@ Function ZTIProcess()
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success
-		If Not oFSO.FolderExists(sFolder) Then
-		  oFSO.CreateFolder sFolder
-		  oLogging.CreateEntry "Created folder" & sFolder, LogTypeInfo
+		If Not oFSO.FolderExists(sPluginsPath) Then
+		  oFSO.CreateFolder sPluginsPath
+		  oLogging.CreateEntry "Created folder" & sPluginsPath, LogTypeInfo
 		End If
-		oFSO.CopyFile (oUtility.ScriptDir & "\Source\ComparePlugin.dll"), (sFolder & "\ComparePlugin.dll"), True
+		oFSO.CopyFile ("" & oUtility.ScriptDir & "\Configs\" & sArch & "\ComparePlugin.dll"""), (sPluginsPath & "\ComparePlugin.dll"), True
+		
+		If Not oFSO.FolderExists(sThemesPath) Then
+		  oFSO.CreateFolder sThemesPath
+		  oLogging.CreateEntry "Created folder" & sThemesPath, LogTypeInfo
+		End If
+		oFSO.CopyFile ("" & oUtility.ScriptDir & "\Configs\themes\Solarized (Light).xml"""), (sPluginsPath & "\Solarized-Light.xml"), True
+		oFSO.CopyFile ("" & oUtility.ScriptDir & "\Configs\themes\Solarized (Dark).xml"""), (sPluginsPath & "\Solarized.xml"), True
 		
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
 	Else 
@@ -118,6 +138,9 @@ End Function
 
 </script>
 </job>
+
+
+
 
 
 

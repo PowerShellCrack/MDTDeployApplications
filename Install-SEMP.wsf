@@ -1,0 +1,274 @@
+<job id="Install-SEMP">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-SEMP.wsf
+' //
+' // Purpose: This will install USSOCOM SEMP
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-SEMP.wsf [/arch:x64|x86] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal 
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sInstalledPath,sConfigPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim arySplitVer,sMajVer,sMinVer
+	Dim sPrefix
+	Dim sOfficeVer
+	
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = LCase(oUtility.Arguments("arch"))
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = LCase(oEnvironment.Item("Architecture"))
+	Else
+		sArch = "x86"
+	End If
+	
+	' check if MDT variable exists
+	If oUtility.Arguments.Exists("prefix") Then
+		sPrefix = LCase(oUtility.Arguments("prefix"))
+	ElseIf oEnvironment.Exists("Prefix") Then
+		sPrefix = oEnvironment.Item("Prefix")
+	End if
+	
+	If OfficeVer = "" Then
+		oLogging.CreateEntry "No Office was detected unable to install: " & sInstallName, LogTypeInfo
+		ZTIProcess = Success
+		Exit Function
+	Else
+		oLogging.CreateEntry "Office version installed: " & OfficeVer, LogTypeInfo
+		'Determine if office is x64 or x86
+		sArch = Office32or64
+		oLogging.CreateEntry "Office Architecture installed: " & sArch, LogTypeInfo
+	End if
+	
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "6.2"
+	
+	arySplitVer = Split(sVersion, ".")
+	sMajVer=arySplitVer(0)
+	sMinVer=arySplitVer(1)
+	
+	sInstallName = "USSOCOM SEMP"
+	
+	sFile = "Setup.exe"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sArch & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /Q""")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+		If sArch = "x64" then
+			sInstalledPath = "C:\Program Files\SEMP"
+		Else
+			sInstalledPath = "C:\Program Files (x86)\SEMP"	
+		End If
+		sConfigPath = sInstalledPath & "\ConfigData"
+
+		'Copy SEMP configuration files
+
+		oLogging.CreateEntry "Copying configuration file: " & (oUtility.ScriptDir & "\Configs\" & UCase(sPrefix) & "\SEMP.dll.config"), LogTypeInfo
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\" & UCase(sPrefix) & "\SEMP.dll.config"), (sInstalledPath & "\SEMP.dll.config"), True
+		
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\sempCountries.xml"), (sInstalledPath & "\sempCountries.xml"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\sempmenu.xml"), (sInstalledPath & "\sempmenu.xml"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\sempTypes.xml"), (sInstalledPath & "\sempTypes.xml"), True
+		
+		If Not oFSO.FolderExists(sConfigPath) Then
+			oFSO.CreateFolder sConfigPath
+			oLogging.CreateEntry "Created folder: " & sConfigPath, LogTypeInfo
+		End If
+
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\" & UCase(sPrefix) & "\ConfigData\CaveatDBXMLSource.xml"), (sConfigPath & "\CaveatDBXMLSource.xml"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\" & UCase(sPrefix) & "\ConfigData\DeclassExemptions.xml"), (sConfigPath & "\DeclassExemptions.xml"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\" & UCase(sPrefix) & "\ConfigData\NatoActivitySource.xml"), (sConfigPath & "\NatoActivitySource.xml"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\" & UCase(sPrefix) & "\ConfigData\NCaveatDBXMLSource.xml"), (sConfigPath & "\NCaveatDBXMLSource.xml"), True
+		
+				
+		'On Error Resume Next
+		Const HKEY_CURRENT_USERS = &H80000001
+		Const HKU_USERS = &H80000003
+		Dim objRegistry,strKeyPath,sRegCmd
+		Set objRegistry = GetObject("winmgmts:\\.\root\default:StdRegProv")
+		strKeyPath = "Software\USSOCOM\SEMP"
+		
+		objRegistry.CreateKey HKEY_CURRENT_USERS, strKeyPath
+		oShell.RegWrite "HKCU\" & strKeyPath & "\CurrentVersion", sMajVer, "REG_SZ"
+
+		iRetVal = oUtility.RunWithHeartbeat("reg load ""HKU\Temp"" """ & oEnv("SystemDrive") & "\Users\Default\NTUSER.DAT""")
+
+		objRegistry.CreateKey HKU_USERS, "Temp\" & strKeyPath
+		oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath & "\CurrentVersion", sMajVer, "REG_SZ"
+		
+		oShell.Run "reg unload HKU\Temp", 0, true
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+Function OfficeVer()
+	Dim oRegistry,oWMIService
+	Dim colFiles,oFile
+	Dim sKey,sAppExe,sValue
+	Dim sAppVersion
+	Const HKEY_LOCAL_MACHINE 	= &H80000002
+	 
+	Set oRegistry = GetObject("winmgmts:{impersonationLevel=impersonate}//./root/default:StdRegProv")
+	Set oWMIService = GetObject("winmgmts:\\.\root\cimv2")
+	sKey = "Software\Microsoft\Windows\CurrentVersion\App Paths"
+	sAppExe = "OUTLOOK.EXE"
+	oRegistry.GetStringValue HKEY_LOCAL_MACHINE, sKey & "\" & sAppExe, "", sValue
+	Set colFiles = oWMIService.ExecQuery _
+		("Select * from CIM_Datafile Where Name = '" & replace(sValue, "\", "\\") & "'")
+	For Each oFile in colFiles
+		OfficeVer = oFile.Version
+	Next
+	 
+	Set colFiles = Nothing
+	Set oWMIService = Nothing
+	Set oRegistry = Nothing
+End Function 
+
+Function Office32or64()
+	Dim k
+	Dim sPath
+	Dim aSubKeys(), vKey
+	'Loog for office registry key
+	Const cFind = "00FF1CE}"  ' note zeros and number 1
+	Const HKEY_LOCAL_MACHINE = &H80000002
+	Dim objWMI
+
+		On Error Goto 0
+		Set objWMI = GetObject("winmgmts:{impersonationLevel=impersonate}//./root/default:StdRegProv")
+		
+		sPath = "Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+		
+		For k = 0 To 1
+			objWMI.EnumKey HKEY_LOCAL_MACHINE, sPath, aSubKeys
+			For Each vKey In aSubKeys
+				' if office resigry key is found
+				If InStr(1, vKey, cFind) Then
+					Select Case Mid(vKey, 21, 1)
+						Case "0"
+							Office32or64 = "x86"
+						Case "1"
+							Office32or64 = "x64"
+					End Select
+					Wscript.echo Mid(vKey, 21, 1), vKey
+					Exit Function
+				End If
+			Next
+			' this key will error in 32bit Windows
+			sPath = "Software\Microsoft\Windows\CurrentVersion\Uninstall"
+		Next
+		Exit Function
+
+
+End Function
+
+Function OfficeWMI()
+	Dim strComputer
+	Dim objWMIService
+	Dim colOperatingSystems
+	Dim objOperatingSystem
+	Dim colSoft,objItem
+	
+	strComputer = "."
+    Set objWMIService = GetObject("winmgmts:" _
+        & "{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
+
+    Set colSoft = objWMIService.ExecQuery("SELECT * FROM Win32_Product WHERE Name Like '%Office%'")
+
+    If colSoft.Count = 0 Then
+		OfficeWMI = Null 
+    else
+       For Each objItem In colSoft
+          OfficeWMI = objitem.caption & ", Version" & Left(objItem.Version, InStr(1,objItem.Version,".")-1)
+          exit for
+       Next
+    End If
+End Function
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

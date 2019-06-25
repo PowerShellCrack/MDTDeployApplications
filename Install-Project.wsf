@@ -38,15 +38,15 @@ Function ZTIProcess()
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
 	Dim sMSP, sXML, sCustomInstall, sMSPPath, sXMLPath
-	
+	Dim sLogFolder,sLogName,sLogPath
 	
 	'// Apply Architecture arguments:
 	'If no argument provided check for MDT/SCCM variable
 	'If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
@@ -65,6 +65,16 @@ Function ZTIProcess()
 	sInstallName = "Microsoft Project 2016"
 	
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
 	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	

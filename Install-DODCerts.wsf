@@ -50,25 +50,17 @@ Function ZTIProcess()
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
 	'Install DOD Root Certs
-	'set the a variable to point to our folder with the files in it. 
-	Set objFolder = oFSO.GetFolder(sCertDirPath) 
 
+	Set objFolder = oFSO.GetFolder(sCertDirPath & "\DOD\Root\") 
 	for each objFile in objFolder.Files 
 		if UCase(oFSO.GetExtensionName(objFile.name)) = "CER" Then
-			oLogging.CreateEntry "importing to root certificate store: """ & sCertDirPath & "\" & objFile.Name & "", LogTypeInfo
-			iRetVal = oUtility.RunWithHeartbeat("certutil.exe –f -addstore -enterprise -user root """ & sCertDirPath & "\" & objFile.Name, 0, True)
+			oLogging.CreateEntry "importing to root certificate store: """ & sCertDirPath & "\DOD\Root\" & objFile.Name & "", LogTypeInfo
+			iRetVal = oUtility.RunWithHeartbeat("certutil.exe -f -addstore -enterprise -user root """ & sCertDirPath & "\DOD\Root\" & objFile.Name & """")
 		end if
 		
 		WScript.Sleep 1000 
 	Next
 	
-	for each objFile in objFolder.Files 
-		if UCase(oFSO.GetExtensionName(objFile.name)) = "CER" Then
-			oLogging.CreateEntry "importing to intermediate store: """ & sCertDirPath & "\" & objFile.Name & "", LogTypeInfo
-			iRetVal = oUtility.RunWithHeartbeat("certutil.exe –f –addstore CA """ & sCertDirPath & "\" & objFile.Name, 0, True)
-		end if
-	Next
-
 	if (iRetVal = 0) or (iRetVal = 1) then
 		oLogging.CreateEntry "Successfully adding Certificate to intermediate store", LogTypeInfo
 	Else

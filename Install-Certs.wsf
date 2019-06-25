@@ -1,17 +1,17 @@
-<job id="Install-JDICerts">
+<job id="Install-Certs">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-JDICerts.wsf
+' // File: Install-Certs.wsf
 ' //
 ' // Purpose: This will use certutil to install certs from JDI
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-JDICerts.wsf [/debug:true]
+' // Usage: cscript Install-Certs.wsf [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
@@ -41,7 +41,7 @@ Function ZTIProcess()
 	
 	
 	'// Variables	
-	sInstallName = "JDI root certs"
+	sInstallName = "Certs"
 
 	sCertDirPath = oUtility.ScriptDir & "\Certs"
 	

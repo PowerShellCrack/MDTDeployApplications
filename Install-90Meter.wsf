@@ -36,62 +36,65 @@ On Error Goto 0
 Function ZTIProcess() 
 
 	Dim sVersion,sArch,sFile
+	Dim sPrefix
 	Dim sInstallName, sInstallerPath
 	Dim sLogFolder,sLogName,sLogPath
-	Dim sLog2Name,sLog2Path
-	Dim sPatch,sPatchPath
+	Dim sCertRootInstaller,sCertRootInstallerPath
+	Dim sCertDirPath,sSettingsPath
+	Dim sRegCmd
 	
 	'// Apply Architecture arguments:
 	'If no argument provided check for MDT/SCCM variable
 	'If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
 	
+	' check if MDT variable exists
+	If oUtility.Arguments.Exists("prefix") Then
+		sPrefix = LCase(oUtility.Arguments("prefix"))
+	ElseIf oEnvironment.Exists("Prefix") Then
+		sPrefix = oEnvironment.Item("Prefix")
+	End if
+	
+	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "1.4.32"
+	sVersion = "1.4.33"
 	sArch = "x64"
 	
 	If sArch = "x64" then
-		sFile = "SCM_"& sVersion &"_64Bit_S.msi"
+		sFile = "SCM_"& sVersion &"_64Bit_S_RC4.msi"
 	Else
-		sFile = "SCM_"& sVersion & "_32Bit_S.msi"
+		sFile = "SCM_"& sVersion & "_32Bit_S_RC4..msi"
 	End If
+
 	
 	If sArch = "x64" then
-		sPatch = "SCM_1.4.33_64Bit_S_RC4.msi"
+		sCertRootInstaller = "InstallRoot_SIPR_5.2x64.msi"
 	Else
-		sPatch = "SCM_1.4.33_32Bit_S_RC4.msi"
-	End If
-	
-	If sArch = "x64" then
-		sCertRoot = "InstallRoot_v3.16.3Sx64.exe"
-	Else
-		sCertRoot = "InstallRoot_v3.16.3S.exe"
+		sCertRootInstaller = "InstallRoot_SIPR_5.2x32.msi"
 	End If
 	
 	sInstallName = "90Meter"
 	
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
-	sPatchPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sPatch
-	sCertRootPath = oUtility.ScriptDir & "\Configs\" & sCertRoot
+	sCertRootInstallerPath = oUtility.ScriptDir & "\Configs\" & sCertRootInstaller
+	sCertDirPath = oUtility.ScriptDir & "\Certs\"
 	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
 	sLogPath = sLogFolder & "\" & sLogName
-	sLog2Name = Replace(sInstallName & "_Patch_" & sVersion & "_" & sArch & ".log"," ","")
-	sLog2Path = sLogFolder & "\" & sLog2Name
 	
 	
 	'// Start the process
@@ -106,31 +109,77 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 
-	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
+	iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Configs\Control_Vault\CVHCI64.exe"" /S /v/qn")
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /q ALLUSERS=2 /m MSIHARSK /i """ & sInstallerPath & """ /l*v """ & sLogPath & """")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		
-		iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sPatchPath & """ /qn /norestart /l*v """ & sLog2Path & """")
+		ZTIProcess = Success
 		
-		if (iRetVal = 0) or (iRetVal = 3010) then
-			ZTIProcess = Success
-			iRetVal = oUtility.RunWithHeartbeat("""" & sCertRootPath & """ /s")
-			
-			'oLogging.CreateEntry "importing to root certificate store: """ & sCertDirPath, LogTypeInfo
-			'iRetVal = oUtility.RunWithHeartbeat("certutil.exe –f -addstore -enterprise -user root """ & sCertDirPath)
-			
-			'oLogging.CreateEntry "importing to intermediate store: """ & sCertDirPath & "\" & objFile.Name & "", LogTypeInfo
-			'iRetVal = oUtility.RunWithHeartbeat("certutil.exe –f –addstore CA """ & oUtility.ScriptDir & "\Configs\90m_CodeSigning_Cert.cer"" -c -s -r localMachine TrustedPublisher")
-			
-			If oEnvironment.Item("IsVM") = "False" Then
-				oLogging.CreateEntry "Installing drivers for the OMNIKEY3x2x Reader on " & sArch & " systems", LogTypeInfo
-				iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Configs\HID_OMNIKEY3x2x_" & sArch & "_W7_R1_2_24_27.exe"" /noreboot /S /v/qn")
+		sSettingsPath = "C:\Users\default\AppData\Local\Litronic\OCM"
+		oUtility.VerifyPathExists sSettingsPath
+		oUtility.VerifyPathExists (oEnv("LocalAppData") & "\Litronic\OCM")
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\middleware.settings"), (sSettingsPath & "\middleware.settings"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\middleware.settings"), (oEnv("LocalAppData") & "\Litronic\OCM\middleware.settings"), True
+		
+		iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sCertRootInstallerPath & """ /qn /norestart")
+		DeleteFile "C:\Users\Public\Desktop","InstallRoot SIPR 5.2.lnk"
 
-				oLogging.CreateEntry "Installing drivers for the SCR3xx Reader on " & sArch & " systems", LogTypeInfo
-				iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Configs\SCR3xx_Driver_V4.67\dpinst.exe"" /LM /SA /SW /S")
-			End If
-		End If
+		'Import Root Certs
+		Dim objFolder, objFile
+		Set objFolder = oFSO.GetFolder(sCertDirPath & "\" & UCase(sPrefix) & "\Root") 
 
+		for each objFile in objFolder.Files 
+			if UCase(oFSO.GetExtensionName(objFile.name)) = "CER" Then
+				oLogging.CreateEntry "importing to root certificate store: """ & sCertDirPath & "\" & UCase(sPrefix) & "\Root\" & objFile.Name & "", LogTypeInfo
+				'iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Certs\certmgr.exe"" -add """ & sCertDirPath & "\" & UCase(sPrefix) & "\Root\" & objFile.Name & " -c -s -r localMachine Root")
+				iRetVal = oUtility.RunWithHeartbeat("certutil.exe -f -addstore -enterprise -user root """ & sCertDirPath & "\" & UCase(sPrefix) & "\Root\" & objFile.Name & """")
+			end if
+			
+			WScript.Sleep 1000 
+		Next
+
+		'Import  Sub Certs
+		Set objFolder = oFSO.GetFolder(sCertDirPath & "\" & UCase(sPrefix) & "\Sub") 
+
+		for each objFile in objFolder.Files 
+			if UCase(oFSO.GetExtensionName(objFile.name)) = "CER" Then
+				oLogging.CreateEntry "importing to root certificate store: """ & sCertDirPath & "\" & UCase(sPrefix) & "\Sub\" & objFile.Name & "", LogTypeInfo
+				'iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Certs\certmgr.exe"" -add """ & sCertDirPath & "\" & UCase(sPrefix) & "\Sub\" & objFile.Name & " -c -s -r localMachine CA")
+				iRetVal = oUtility.RunWithHeartbeat("certutil.exe -f -addstore CA """ & sCertDirPath & "\" & UCase(sPrefix) & "\Sub\" & objFile.Name & """")
+			end if
+			
+			WScript.Sleep 1000 
+		Next
+		
+		'Import 90 Meter signing Certs
+		iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Certs\certmgr.exe"" -add """ & sCertDirPath & "\90m_CodeSigning_Cert.cer"" -c -s -r localMachine TrustedPublisher")
+		'iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Certs\certmgr.exe"" -add """ & sCertDirPath & "\DigiSub.cer"" -c -s -r localMachine Root")
+		'iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Certs\certmgr.exe"" -add """ & sCertDirPath & "\DigiRoot.cer"" -c -s -r localMachine Root")
+		'iRetVal = oUtility.RunWithHeartbeat("certutil.exe -f –addstore TrustedPublisher """ & sCertDirPath & "\90m_CodeSigning_Cert.cer")
+		iRetVal = oUtility.RunWithHeartbeat("certutil.exe -f -addstore -enterprise -user root """ & sCertDirPath & "\DigiRoot.cer""")
+		iRetVal = oUtility.RunWithHeartbeat("certutil.exe -f -addstore -enterprise -user root """ & sCertDirPath & "\DigiSub.cer""")
+		
+		'If oEnvironment.Item("IsVM") = "False" Then
+			oLogging.CreateEntry "Installing drivers for the OMNIKEY3x2x Reader on " & sArch & " systems", LogTypeInfo
+			iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Configs\HID_OMNIKEY3x2x_" & sArch & "_W7_R1_2_24_27.exe"" /noreboot /S /v/qn")
+
+			oLogging.CreateEntry "Installing drivers for the SCR3xx Reader on " & sArch & " systems", LogTypeInfo
+			iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Configs\SCR3xx_Driver_V4.67\dpinst.exe"" /LM /SA /SW /S")
+		'End If
+
+		sRegCmd = "cmd.exe /c " & oEnv("SystemRoot") & "\regedit.exe"
+		sRegCmd = sRegCmd & " /s """ & oUtility.ScriptDir & "\Configs\AFR_Settings.reg"""
+		'oShell.Run(sRegCmd, 0, true)
+		oUtility.RunWithConsoleLogging sRegCmd
+
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\ADMX\90meter CACPIVMD DoD Policies.admx"), ("C:\Windows\PolicyDefinitions\90meter CACPIVMD DoD Policies.admx"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\ADMX\90meter CACPIVMD Policies.admx"), ("C:\Windows\PolicyDefinitions\90meter CACPIVMD Policies.admx"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\ADMX\en-US\90meter CACPIVMD DoD Policies.adml"), ("C:\Windows\PolicyDefinitions\en-US\90meter CACPIVMD DoD Policies.adml"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\ADMX\en-US\90meter CACPIVMD Policies.adml"), ("C:\Windows\PolicyDefinitions\en-US\90meter CACPIVMD Policies.adml"), True
+		oLogging.CreateEntry "Policy Configurations files were copied to ""C:\Windows\PolicyDefinitions"" folder", LogTypeInfo	
+		
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo		
 	Else 
 		ZTIProcess = Failure
@@ -139,6 +188,21 @@ Function ZTIProcess()
 	
 	'// Enable Zone Checks
 	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
 
 End Function
 

@@ -20,50 +20,70 @@
 '//---------------------------------------------------------------------------- 
 Option Explicit 
 
-Dim iRetVal
-
+Dim iRetVal 
 '//----------------------------------------------------------------------------
 '// Main routine
 '//---------------------------------------------------------------------------- 
 'On Error Resume Next
 iRetVal = ZTIProcess
 ProcessResults iRetVal
-On Error Goto 0
+On Error Goto 0 
 
 '//---------------------------------------------------------------------------
 '// Function: ZTIProcess()
 '//---------------------------------------------------------------------------
 Function ZTIProcess() 
 
-	Dim sInstallName,sVersion
-	Dim sFile, sInstallerPath,sArch
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
 	Dim sInstalledPath
+	Dim sPrefix
+	Dim sLogFolder,sLogName,sLogPath
 	
 	'// Apply Architecture arguments:
-	'If no argument provided check for MDT/SCCM variable
-	'If no variable or argument is provided, defualt to x86
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
 	
+	' check if MDT variable exists
+	If oUtility.Arguments.Exists("prefix") Then
+		sPrefix = LCase(oUtility.Arguments("prefix"))
+	ElseIf oEnvironment.Exists("Prefix") Then
+		sPrefix = oEnvironment.Item("Prefix")
+	End if
+	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "65.0"
+	sVersion = "67.0.3"
 	
 	If sArch = "x64" then
 		sFile = "Firefox Setup " & sVersion & " (x64).exe"
+		sInstalledPath = "C:\Program Files\Mozilla Firefox"
 	Else
 		sFile = "Firefox Setup " & sVersion & ".exe"
+		sInstalledPath = "C:\Program Files (x86)\Mozilla Firefox"
 	End If
 	
 	sInstallName = "Mozilla Firefox"
 	
-	sInstallerPath = oUtility.ScriptDir & "\Source\" & sFile
-
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
 	'// Start the process
 	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
 	
@@ -81,10 +101,18 @@ Function ZTIProcess()
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success 
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
-		sInstalledPath = "C:\Program Files\Mozilla Firefox"
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mozilla.cfg"), (sInstalledPath & "\mozilla.cfg"), True
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\override.ini"), (sInstalledPath & "\browser\override.ini"), True
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\local-settings.js"), (sInstalledPath & "\defaults\pref\local-settings.js"), True
+
+		'Copy deployment.properties
+		If oFSO.FileExists(oUtility.ScriptDir & "\Configs\mozilla." & LCase(sPrefix) & ".cfg") then
+			oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mozilla." & LCase(sPrefix) & ".cfg"), (sInstalledPath & "\mozilla.cfg"), True
+			oFSO.CopyFile (oUtility.ScriptDir & "\Configs\override.ini"), (sInstalledPath & "\browser\override.ini"), True
+			oFSO.CopyFile (oUtility.ScriptDir & "\Configs\local-settings.js"), (sInstalledPath & "\defaults\pref\local-settings.js"), True
+			oLogging.CreateEntry "Configurations files were copied: " & (oUtility.ScriptDir & "\Configs\mozilla."& LCase(sPrefix) & ".cfg"), LogTypeInfo
+		Else
+			oLogging.CreateEntry oUtility.ScriptDir & "\Configs\mozilla." & LCase(sPrefix) & ".cfg" & " was not found. no configurations was set ", LogTypeInfo
+		End If
+
+		
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
@@ -95,9 +123,10 @@ Function ZTIProcess()
 
 End Function 
 
-
 </script>
 </job>
+
+
 
 
 

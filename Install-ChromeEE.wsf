@@ -38,22 +38,30 @@ Function ZTIProcess()
 	Dim sVersion,sArch,sFile
 	Dim sInstallName, sInstallerPath
 	Dim sLogFolder,sLogName,sLogPath
+	Dim sPrefix
 	Dim sInstalledPath
 	
 	'// Apply Architecture arguments:
 	'// If no argument provided check for MDT/SCCM variable
 	'// If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
 	
+	'Apply Arguments
+	If oUtility.Arguments.Exists("prefix") Then
+		sPrefix = oUtility.Arguments("prefix")
+	ElseIf oEnvironment.Exists("Prefix") Then
+		sPrefix = oEnvironment.Item("Prefix")
+	End if
+	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "72.0.3626.81"
+	sVersion = "74.0.3729.157"
 	
 	If sArch = "x64" then
 		sFile = "googlechromestandaloneenterprise64.msi"
@@ -66,10 +74,10 @@ Function ZTIProcess()
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
@@ -97,8 +105,11 @@ Function ZTIProcess()
 		Else
 			sInstalledPath = oEnv("PROGRAMFILESX86") & "\Google\Chrome\Application"
 		End If
+		
 		oUtility.VerifyPathExists sInstalledPath
-		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\master_preferences.txt"), (sInstalledPath & "\master_preferences.txt"), True
+		If oFSO.FileExists(oUtility.ScriptDir & "\Configs\" & sPrefix & "\master_preferences") then
+			oFSO.CopyFile (oUtility.ScriptDir & "\Configs\" & sPrefix & "\master_preferences"), (sInstalledPath & "\master_preferences"), True
+		End if
 	Else 
 		ZTIProcess = Failure
 		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
@@ -111,6 +122,8 @@ End Function
 
 </script>
 </job>
+
+
 
 
 

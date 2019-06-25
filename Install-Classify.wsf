@@ -1,0 +1,124 @@
+<job id="Install-Classify">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-Classify.wsf
+' //
+' // Purpose: This will install Classify for Outlook
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-Classify.wsf [/arch:x64|x86] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal 
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sFile2, sInstallerPath2
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sLogName2,sLogPath2
+	
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = LCase(oUtility.Arguments("arch"))
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = LCase(oEnvironment.Item("Architecture"))
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "10.0.30319.1"
+	
+	sFile = "Setup.exe"
+	sFile2 = "vstor40_" & sArch & ".exe"
+	
+	sInstallName = "Classify for Outlook"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sArch & "\" & sFile
+	sInstallerPath2 = oUtility.ScriptDir & "\Source\" & sArch & "\VSTOR40\" & sFile2
+
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogName2 = Replace("VSTOR40_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	sLogPath2 = sLogFolder & "\" & sLogName2
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+	
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath2 & """ /S /v""/qn /l*v """ & sLogPath2 & """""")
+	
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /S /v""/qn /l*v """ & sLogPath & """""")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")
+
+End Function 
+
+
+</script>
+</job>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

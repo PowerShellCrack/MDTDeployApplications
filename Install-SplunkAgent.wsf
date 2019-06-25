@@ -1,0 +1,120 @@
+<job id="Install-SplunkAgent">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-SplunkAgent.wsf
+' //
+' // Purpose: This will install Splunk Universal Forwarder
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-SplunkAgent.wsf [/arch:x64|x86] [/URI:<IP>:<Port>] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//----------------------------------------------------------------------------
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//----------------------------------------------------------------------------
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim arySplitVer,sMajVer,sMinVer
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sSplunkURI
+
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = LCase(oUtility.Arguments("arch"))
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = LCase(oEnvironment.Item("Architecture"))
+	Else
+		sArch = "x86"
+	End If
+	
+	If oUtility.Arguments.Exists("URI") Then
+		sSplunkURI = LCase(oUtility.Arguments("URI"))
+	ElseIf oEnvironment.Exists("SPLUNK_SERVER") Then
+		sSplunkURI = LCase(oEnvironment.Item("SPLUNK_SERVER"))
+	Else
+		sSplunkURI = ""
+	End If
+	
+
+	'// Variables: 
+	'// Change if needed
+	sVersion = "7.1.2-a0c72a66db66"	
+	
+	arySplitVer = Split(sVersion, "-")
+	sMajVer=arySplitVer(0)
+	sMinVer=arySplitVer(1)
+	
+	sInstallName = "Splunk Universal Forwarder"
+	
+	sFile = "splunkforwarder-" & sVersion & "-" & sArch & "-release.msi"
+	
+	oLogging.CreateEntry sInstallName & ": Starting SplunkAgent installation", LogTypeInfo
+
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sMajVer & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sMajVer & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sMajVer & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ AGREETOLICENSE=Yes DEPLOYMENT_SERVER=""" & sSplunkURI & """ /quiet /l*v """ & sLogPath & """")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+			
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+
+	'/// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+</script>
+</job>
+

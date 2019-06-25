@@ -1,0 +1,198 @@
+<job id="Install-AdobeConnect">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-AdobeConnect.wsf
+' //
+' // Purpose: This will install Adobe Connect Plugin
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-AdobeConnect.wsf [/profile:Default|User|AllUsers] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sFile,sArch
+	Dim sInstallName, sInstallerPath
+	Dim sProfile,bLoadHive
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sCopyPath,sREGPath,sRegHive
+	Dim sLoadHiveFile
+	Dim sSystemPath, sUserPath
+	'// Variables: 
+	'// Change if needed
+	sVersion = "11.9.980.387"
+
+	sArch = "x86"
+	
+	sFile = "adobeconnectaddin.exe"
+	
+	sInstallName = "Adobe Connect 11 Add-in"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	If oEnvironment.Exists("SystemDrive") Then 
+		sSystemPath = oEnvironment.Item("SystemDrive")
+		sUserPath = oEnvironment.Item("UserProfile")
+	Else
+		sSystemPath = oEnv("SystemDrive")
+		sUserPath = oEnv("UserProfile")
+	End If
+	
+	'// copy exe
+	If oUtility.Arguments.Exists("profile") then
+		sCopyPath = sSystemPath & "\Users\" & oUtility.Arguments("profile") & "\AppData\Roaming\Macromedia\Flash Player\www.macromedia.com\bin\adobeconnectaddin"
+	Else
+		sCopyPath = sSystemPath & "\Users\Default\AppData\Roaming\Macromedia\Flash Player\www.macromedia.com\bin\adobeconnectaddin"
+	End If
+	
+	sREGPath = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" & sInstallName
+	
+	If oUtility.Arguments.Exists("profile") then
+		sProfile = oUtility.Arguments("profile")
+		
+		If sProfile = "AllUsers" then
+			'Copy to default profile
+			sCopyPath = sSystemPath & "\Users\Default\AppData\Roaming\Macromedia\Flash Player\www.macromedia.com\bin\adobeconnectaddin"
+			oUtility.VerifyPathExists sCopyPath
+			iRetVal = oUtility.RunWithHeartbeat("cmd.exe /c xcopy /E /I /C /Q /Y """ & oUtility.ScriptDir & "\Source\" & sVersion & """ """ & sCopyPath & """")
+			
+			'Copy to current user profile
+			sCopyPath = sUserPath & "\AppData\Roaming\Macromedia\Flash Player\www.macromedia.com\bin\adobeconnectaddin"
+			oUtility.VerifyPathExists sCopyPath
+			iRetVal = oUtility.RunWithHeartbeat("cmd.exe /c xcopy /E /I /C /Q /Y """ & oUtility.ScriptDir & "\Source\" & sVersion & """ """ & sCopyPath & """")
+
+			sRegHive = "HKEY_USERS\Temp"
+			sLoadHiveFile = sSystemPath & "\Users\Default\NTUSER.DAT"
+		Else
+			Select Case sProfile
+				Case "User"
+					sCopyPath = sUserPath & "\AppData\Roaming\Macromedia\Flash Player\www.macromedia.com\bin\adobeconnectaddin"
+					sRegHive = "HKCU"
+					sLoadHiveFile = ""
+				Case "Default"
+					sCopyPath = sSystemPath & "\Users\Default\AppData\Roaming\Macromedia\Flash Player\www.macromedia.com\bin\adobeconnectaddin"
+					sRegHive = "HKEY_USERS\.DEFAULT"
+					sLoadHiveFile = ""
+				Case Else
+					sCopyPath = sSystemPath & "\Users\" & sProfile & "\AppData\Roaming\Macromedia\Flash Player\www.macromedia.com\bin\adobeconnectaddin"
+					sRegHive = "HKEY_USERS\Temp"
+					sLoadHiveFile = sSystemPath & "\Users\" & sProfile & "\NTUSER.DAT"
+			End Select
+			
+			oUtility.VerifyPathExists sCopyPath
+			iRetVal = oUtility.RunWithHeartbeat("cmd.exe /c xcopy /E /I /C /Q /Y """ & oUtility.ScriptDir & "\Source\" & sVersion & """ """ & sCopyPath & """")
+		End If
+	Else
+		sCopyPath = sUserPath & "\AppData\Roaming\Macromedia\Flash Player\www.macromedia.com\bin\adobeconnectaddin"
+		sRegHive = "HKCU"
+		sLoadHiveFile = ""
+		
+		oUtility.VerifyPathExists sCopyPath
+		iRetVal = oUtility.RunWithHeartbeat("cmd.exe /c xcopy /E /I /C /Q /Y """ & oUtility.ScriptDir & "\Source\" & sVersion & """ """ & sCopyPath & """")
+	End If
+	
+	If (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		
+		Const HKEY_CURRENT_USERS = &H80000001
+		Const HKU_USERS = &H80000003
+		Dim objRegistry
+		Set objRegistry = GetObject("winmgmts:\\.\root\default:StdRegProv")
+
+		If sLoadHiveFile <> "" then
+			iRetVal = oUtility.RunWithHeartbeat("reg load " & sRegHive & " " & sLoadHiveFile)
+			objRegistry.CreateKey HKU_USERS, sRegHive
+		Else
+			objRegistry.CreateKey HKEY_CURRENT_USERS, sRegHive
+		End If
+		
+		oLogging.CreateEntry "Applying Keys to: """ & sRegHive & "\" & sREGPath & "", LogTypeInfo	
+		oShell.RegWrite sRegHive & "\" & sREGPath & "\DisplayName",sInstallName,"REG_SZ"
+		oShell.RegWrite sRegHive & "\" & sREGPath & "\Publisher","Adobe Systems Incorporated","REG_SZ"
+		oShell.RegWrite sRegHive & "\" & sREGPath & "\DisplayVersion",sVersion,"REG_SZ"
+		oShell.RegWrite sRegHive & "\" & sREGPath & "\DisplayIcon",sCopyPath & "\" & sFile & ",0","REG_SZ"
+		oShell.RegWrite sRegHive & "\" & sREGPath & "\NoRepair",1, "REG_DWORD"
+		oShell.RegWrite sRegHive & "\" & sREGPath & "\NoModify",1, "REG_DWORD"
+		oShell.RegWrite sRegHive & "\" & sREGPath & "\HelpLink","http://helpx.adobe.com/adobe-connect.html","REG_SZ"
+		oShell.RegWrite sRegHive & "\" & sREGPath & "\UninstallString",sCopyPath & "\adobeconnectaddin.exe -uninstall","REG_SZ"
+
+		If sLoadHiveFile <> "" then
+			oShell.Run "reg unload HKU\Temp", 0, true	
+		End If
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+
+	oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+
+	
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+</script>
+</job>
+

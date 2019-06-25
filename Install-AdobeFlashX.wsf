@@ -45,16 +45,16 @@ Function ZTIProcess()
 	'// If no argument provided check for MDT/SCCM variable
 	'// If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
 	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "32.0.0.114"
+	sVersion = "32.0.0.207"
 	sType = "active_x"
 	
 	arySplitVer = Split(sVersion, ".")
@@ -68,10 +68,10 @@ Function ZTIProcess()
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
@@ -89,32 +89,23 @@ Function ZTIProcess()
 	'// Disable Zone Checks
 	oEnv("SEE_MASK_NOZONECHECKS") = 1 
 	
-	Dim strComputer,objWMIService
-	Dim oss,os,sOSVer
-	Dim arySplitOSVer,sOSMajVer,sOSMinVer,sOSShortVer
-	strComputer = "."
-	Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
-	Set oss = objWMIService.ExecQuery ("Select * from Win32_OperatingSystem")
 	
-	For Each os in oss
-	 sOSVer = os.Version
-	Next
-	
-	arySplitOSVer = Split(sOSVer, ".")
-	sOSMajVer=arySplitOSVer(0)
-	sOSMinVer=arySplitOSVer(1)
-	
-	sOSShortVer = (sOSMajVer & "." & sOSMinVer)
-	
-	If sOSShortVer = "10.0" Then
+	If OSVer = "10.0" Then
 		iRetVal = 0
+		oLogging.CreateEntry "Unable to install on Windows 8 or higher, skipping install", LogTypeInfo
 	Else
 		iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /qn /norestart /l*v """ & sLogPath & """")
 	End If
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
 		ZTIProcess = Success 
-		oFSO.CopyFile (oUtility.ScriptDir & "\Source\mms.cfg"), ("C:\Windows\system32\Macromed\Flash\mms.cfg"), True
+		oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mms.cfg"), ("C:\Windows\system32\Macromed\Flash\mms.cfg"), True
+		If sArch = "x64" then
+			oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mms.cfg"), ("C:\Windows\system32\Macromed\Flash\mms.cfg"), True
+			oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mms.cfg"), ("C:\Windows\sysWOW64\Macromed\Flash\mms.cfg"), True
+		Else
+			oFSO.CopyFile (oUtility.ScriptDir & "\Configs\mms.cfg"), ("C:\Windows\system32\Macromed\Flash\mms.cfg"), True
+		End If
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo  	
 	Else 
 		ZTIProcess = Failure
@@ -144,8 +135,30 @@ Function CopyFile(sName,sDestPath)
 
 End Function
 
+Function OSVer()
+	Dim strComputer,objWMIService
+	Dim oss,os,sOSVer
+	Dim arySplitOSVer,sOSMajVer,sOSMinVer,sOSShortVer
+	strComputer = "."
+	Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
+	Set oss = objWMIService.ExecQuery ("Select * from Win32_OperatingSystem")
+	
+	For Each os in oss
+	 sOSVer = os.Version
+	Next
+	
+	arySplitOSVer = Split(sOSVer, ".")
+	sOSMajVer=arySplitOSVer(0)
+	sOSMinVer=arySplitOSVer(1)
+	
+	OSVer = (sOSMajVer & "." & sOSMinVer)
+
+End Function
+
 </script>
 </job>
+
+
 
 
 

@@ -1,17 +1,17 @@
-<job id="Install-Netbanner">
+<job id="Install-Capicom">
 <script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
 <script language="VBScript"> 
 
 ' //----------------------------------------------------------------------------
 ' //
 ' // Solution: Richard's Deployment Script
-' // File: Install-Netbanner.wsf
+' // File: Install-Capicom.wsf
 ' //
-' // Purpose: This will install Microsoft Netbanner
+' // Purpose: This will install Microsoft Capicom
 ' //
 ' // Author: Richard Tracy
 ' //
-' // Usage: cscript Install-Netbanner.wsf [/arch:x64|x86] [/debug:true]
+' // Usage: cscript Install-Capicom.wsf [/arch:x64|x86] [/debug:true]
 ' //
 ' //----------------------------------------------------------------------------
 
@@ -43,28 +43,28 @@ Function ZTIProcess()
 	'// If no argument provided check for MDT/SCCM variable
 	'// If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
 	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "1.2.91"
+	sVersion = "2.1.0.2"
 	
-	sFile = "NetBanner.msi"
+	sFile = "Capicom2.msi"
 	
-	sInstallName = "Netbanner"
+	sInstallName = "Microsoft Capicom"
 	
 	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
 	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")

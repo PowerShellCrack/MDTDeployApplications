@@ -1,0 +1,124 @@
+<job id="Install-ArcGIS">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-ArcGIS.wsf
+' //
+' // Purpose: This will install ArcGIS
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-ArcGIS.wsf [/arch:x64|x86] [/licenseserver:<fdqn>][/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sLicenseServer
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sSQLncliVer
+	
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = LCase(oUtility.Arguments("arch"))
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = LCase(oEnvironment.Item("Architecture"))
+	Else
+		sArch = "x86"
+	End If
+	
+	' check if MDT variable exists
+	If oUtility.Arguments.Exists("licenseserver") Then
+		sLicenseServer = LCase(oUtility.Arguments("licenseserver"))
+	ElseIf oEnvironment.Exists("ESRI_LICENSE_SVR") Then
+		sLicenseServer = oEnvironment.Item("ESRI_LICENSE_SVR")
+	End if
+	
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "10.3.1"
+		
+	sInstallName = "ArcGIS Desktop"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion
+
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath & "\Desktop\setup.msi") then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & "\Desktop\setup.msi"" AgreeToLicense=Yes ESRI_LICENSE_HOST=" & sLicenseServer & " DESKTOP_CONFIG=True SEAT_PREFERENCE=Float SOFTWARE_CLASS=Editor ISCHECKFORPRODUCTUPDATES=0 ENABLEEUEI=0 /qn /norestart  /l*v """ & sLogPath & """")
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & "\DesktopBackgroundGP\setup.msi"" REBOOTYESNO=No ISCHECKFORPRODUCTUPDATES=0 /qn /norestart  /l*v """ & sLogFolder & "\ArcGIS_BackgroundGP_for_Desktop.log""")
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & "\DataInteropDesktop\setup.msi"" AgreeToLicense=Yes ISCHECKFORPRODUCTUPDATES=0 /qn /norestart  /l*v """ & sLogFolder & "\ArcGIS_Data_Interop_Ext_for_Desktop.log""")
+	
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & "\VBACompatibility\setup.msi"" AgreeToLicense=Yes ISCHECKFORPRODUCTUPDATES=0 /qn /norestart  /l*v """ & sLogFolder & "\ArcGIS_VBA_Compatibility_for_Desktop.log""")
+	
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		
+		ZTIProcess = Success
+		
+		sSQLncliVer = "11.0.2100.60"
+		'Install SQL native Client
+		iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & "\" & sSQLncliVer & "(" & sArch & ")\sqlncli.msi"" /qn /norestart  /l*v """ & sLogFolder & "\SQLNativeClient_" & sArch & "_" & sSQLncliVer & ".log""")
+	
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo		
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function
+
+
+</script>
+</job>
+

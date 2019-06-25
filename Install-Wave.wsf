@@ -1,0 +1,129 @@
+<job id="Install-Wave">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-Wave.wsf
+' //
+' // Purpose: This will install Twisted Pair Wave Communicator
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-Wave.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal 
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0 
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sWaveUserConfigPath
+	Dim sPrefix
+	
+	'// Apply Architecture arguments:
+	'// If no argument provided check for MDT/SCCM variable
+	'// If no variable or argument is provided, defualt to x86
+	sArch = "x86"
+
+	' check if MDT variable exists
+	If oUtility.Arguments.Exists("prefix") Then
+		sPrefix = LCase(oUtility.Arguments("prefix"))
+	ElseIf oEnvironment.Exists("Prefix") Then
+		sPrefix = oEnvironment.Item("Prefix")
+	End if
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "5.12.0.0"
+
+	'sFile = "WAVE Desktop Communicator R2.msi"
+	sFile = "wcdsetupr2.exe"
+	
+	sInstallName = "Twisted Pair Wave Communicator"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	'iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /quiet /qb AGREETOLICENSE=Yes ADDDESKTOPICONYESNO=Yes RebootYesNo=No ISCHECKFORPRODUCTUPDATES=0 SHOWLAUNCHPROGRAM=1 /NORESTART /l*v """ & sLogPath & """")
+	iRetVal = oUtility.RunWithHeartbeat("""" & sInstallerPath & """ /S /sms /v""/qn ADDLOCAL=ALL ADDDESKTOPICONYESNO=YES /NORESTART /l*v """ & sLogPath & """""")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success 
+		
+		sWaveUserConfigPath = oEnv("SystemDrive") & "\Users\Default\Appdata\Local\Motorola_Solutions,_Inc\WAVEDesktopCommunicator.e_Url_tmfdbu0dv4zrorhhz0lqk1bte3ht0ilq\" & sVersion
+		'oLogging.CreateEntry sWaveUserConfigPath, LogTypeInfo	
+		If not oFSO.FileExists(sWaveUserConfigPath & "\user.config") then
+			oUtility.RunWithHeartbeat("%COMSPEC% /c mkdir """ & sWaveUserConfigPath & "")
+			oFSO.CopyFile (oUtility.ScriptDir & "\Configs\" & sPrefix & "\user.config"), (sWaveUserConfigPath & "\user.config"), True
+		End If
+		
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+</script>
+</job>
+

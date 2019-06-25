@@ -1,0 +1,172 @@
+<job id="Install-GoogleEarth">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript">
+ 
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-AdobeReader.wsf
+' //
+' // Purpose: This will install Adobe Actobat Reader DC
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-GoogleEarth.wsf [/arch:x64|x86] [/cachedir:<path to dir>] [/kmldir:<path to dir>] [/ServerURL:<http:/<url>:<port>] [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sArch,sFile
+	Dim sInstallName, sInstallerPath
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sURL,sCacheDir,sKmlDir
+	
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	sArch = "x86"
+	
+	If oUtility.Arguments.Exists("cachedir") Then
+		sCacheDir = oUtility.Arguments("arch")
+	Else
+		sCacheDir = oEnv("AllUsersProfile") & "\Google\GoogleEarth"
+	End If
+	
+	If oUtility.Arguments.Exists("kmldir") Then
+		sKmlDir = oUtility.Arguments("kmldir")
+	Else
+		sKmlDir = oEnv("AllUsersProfile") & "\Google\GoogleEarth"
+	End If
+	
+
+	'// Variables: 
+	'// Change if needed
+	sVersion = "7.1.1.1888"
+
+	sFile = "Google Earth EC.msi"
+
+	sInstallName = "Google Earth EC"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile
+
+	
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ CACHEDIR=""" & sCacheDir & """ KMLDIR=""" & sKmlDir & """ AgreeToLicense=YES /qn /norestart /l*v """ & sLogPath & """")
+
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+		'DeleteFile "C:\Users\Public\Desktop","Google Earth EC.lnk"
+
+		If oUtility.Arguments.Exists("serverURL") Then
+			sURL = LCase(oUtility.Arguments("serverURL"))
+		ElseIf oEnvironment.Exists("GoogleECServerURL") Then
+			sURL = LCase(oEnvironment.Item("GoogleECServerURL"))
+		Else
+			sURL = ""
+		End If
+		
+		'On Error Resume Next
+		Const HKEY_CURRENT_USERS = &H80000001
+		Const HKU_USERS = &H80000003
+		Dim objRegistry,strKeyPath,arrData
+		Set objRegistry = GetObject("winmgmts:\\.\root\default:StdRegProv")
+		arrData = Array(sURL)
+		strKeyPath = "Software\Google\Google Earth EC"
+		objRegistry.CreateKey HKEY_CURRENT_USERS, strKeyPath
+		
+		oShell.RegWrite "HKCU\" & strKeyPath &"\wasMaximized", "true", "REG_SZ"
+		oShell.RegWrite "HKCU\" & strKeyPath &"\enableTips", "false", "REG_SZ"
+		
+		If sURL <> "" Then
+			oShell.RegWrite "HKCU\" & strKeyPath &"\DefaultServerUrl", sURL, "REG_SZ"
+			objRegistry.SetMultiStringValue HKEY_CURRENT_USERS,strKeyPath,"LastUrls-4_3",arrData
+		End If
+		
+		iRetVal = oUtility.RunWithHeartbeat("reg load ""HKU\Temp"" """ & oEnv("SystemDrive") & "\Users\Default\NTUSER.DAT""")
+				
+		objRegistry.CreateKey HKU_USERS, "Temp\" & strKeyPath
+		oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath &"\wasMaximized", "true", "REG_SZ"
+		oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath &"\enableTips", "false", "REG_SZ"
+
+		If sURL <> "" Then
+			oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath &"\DefaultServerUrl", sURL, "REG_SZ"
+			objRegistry.SetMultiStringValue HKU_USERS,"Temp\" & strKeyPath,"LastUrls-4_3",arrData
+		End If
+		
+		oShell.Run "reg unload HKU\Temp", 0, true
+		
+		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+	
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+	
+End Function
+
+Function DeleteFile(sPath, sName)
+
+	On error resume next
+	Dim strFullPath
+	strFullPath = sPath & "\" & sName
+	If oFSO.fileexists(strFullPath) Then
+		oLogging.CreateEntry "File Found: " & strFullPath, LogTypeInfo
+		oFSO.DeleteFile strFullPath,0
+		oLogging.CreateEntry "File Deleted: " & strFullPath, LogTypeInfo
+	Else
+		oLogging.CreateEntry "File Not Found: " & strFullPath & ", skipping", LogTypeInfo
+	End If
+
+End Function
+
+</script>
+</job>
+
+
+
+
+
+
+

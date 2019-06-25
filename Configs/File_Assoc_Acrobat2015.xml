@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DefaultAssociations>
+	<Association Identifier=".pdf" ProgID="Acrobat.Document.2015" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".pdfxml" ProgID="Acrobat.pdfxml" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".acrobatsecuritysettings" ProgID="Acrobat.acrobatsecuritysettings" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".fdf" ProgID="Acrobat.FDFDoc" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".xfdf" ProgID="Acrobat.XFDFDoc" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".xdp" ProgID="Acrobat.XDPDoc" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".pdx" ProgID="PDXFileType" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".api" ProgID="Acrobat.Plugin" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".secstore" ProgID="Acrobat.SecStore" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".sequ" ProgID="Acrobat.Sequence" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".rmf" ProgID="Acrobat.RMFFile" ApplicationName="Adobe Acrobat DC" />
+	<Association Identifier=".bpdx" ProgID="AcrobatBPDXFileType" ApplicationName="Adobe Acrobat DC" />
+</DefaultAssociations>
+
+

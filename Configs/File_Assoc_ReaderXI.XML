@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DefaultAssociations>
+	<Association Identifier=".pdf" ProgID="AcroExch.Document.11" ApplicationName="Adobe Reader XI" />
+	<Association Identifier=".pdfxml" ProgID="AcroExch.pdfxml" ApplicationName="Adobe Reader XI" />
+	<Association Identifier=".acrobatsecuritysettings" ProgID="AcroExch.acrobatsecuritysettings" ApplicationName="Adobe Reader XI" />
+	<Association Identifier=".fdf" ProgID="AcroExch.FDFDoc" ApplicationName="Adobe Reader XI" />
+	<Association Identifier=".xfdf" ProgID="AcroExch.XFDFDoc" ApplicationName="Adobe Reader XI" />
+	<Association Identifier=".xdp" ProgID="AcroExch.XDPDoc" ApplicationName="Adobe Reader XI" />
+	<Association Identifier=".pdx" ProgID="PDXFileType" ApplicationName="Adobe Reader XI" />
+	<Association Identifier=".api" ProgID="AcroExch.Plugin" ApplicationName="Adobe Reader XI" />
+	<Association Identifier=".secstore" ProgID="AcroExch.SecStore" ApplicationName="Adobe Reader XI" />
+</DefaultAssociations>
+
+

@@ -45,9 +45,9 @@ Function ZTIProcess()
 	'If no argument provided check for MDT/SCCM variable
 	'If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
@@ -72,10 +72,10 @@ Function ZTIProcess()
 	sInstallerPath2 = oUtility.ScriptDir & "\Source\" & sVersion & "\" & sFile2
 
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
@@ -96,7 +96,7 @@ Function ZTIProcess()
 	iRetVal = oUtility.RunWithHeartbeat("" & sInstallerPath & "")
 	
 	if (iRetVal = 0) or (iRetVal = 3010) then
-		ZTIProcess = Success
+		ZTIProcess = Success 
 		iRetVal = oUtility.RunWithHeartbeat("" & sInstallerPath2 & "")
 		
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
@@ -106,14 +106,12 @@ Function ZTIProcess()
 			Set oLink = oShell.CreateShortcut(oShell.SpecialFolders("AllUsersDesktop") & "\EZTV.lnk")
 			
 			If sArch = "x64" then
-				oLink.TargetPath = oEnv("PROGRAMFILES") & "\internet explorer\iexplore.exe"
-				oLink.Arguments = """" & oEnv("PROGRAMFILES") & "\internet explorer\iexplore.exe """ & sLink & ""
+				oLink.TargetPath = oEnv("PROGRAMFILES") & "\Internet Explorer\iexplore.exe"
 			Else
-				oLink.TargetPath = oEnv("PROGRAMFILES(X86)") & "\internet explorer\iexplore.exe"
-				oLink.Arguments = """" & oEnv("PROGRAMFILES(X86)") & "\internet explorer\iexplore.exe """ & sLink & ""
+				oLink.TargetPath = oEnv("PROGRAMFILES(X86)") & "\Internet Explorer\iexplore.exe"
 			End If
 			
-			oLink.Arguments = """C:\Program Files\internet explorer\iexplore.exe" & sLink & ""
+			oLink.Arguments = sLink
 			oLink.Save
 
 			oLogging.CreateEntry "Shortcut """ & oShell.SpecialFolders("AllUsersDesktop") & "\EZTV.lnk"" created.", LogTypeInfo

@@ -47,16 +47,16 @@ Function ZTIProcess()
 	'If no argument provided check for MDT/SCCM variable
 	'If no variable or argument is provided, defualt to x86
 	If oUtility.Arguments.Exists("arch") Then
-		sArch = oUtility.Arguments("arch")
+		sArch = LCase(oUtility.Arguments("arch"))
 	ElseIf oEnvironment.Exists("Architecture") Then
-		sArch = oEnvironment.Item("Architecture")
+		sArch = LCase(oEnvironment.Item("Architecture"))
 	Else
 		sArch = "x86"
 	End If
 	
 	'// Variables: 
 	'// Change if needed
-	sVersion = "2019.010.20069"
+	sVersion = "2019.012.20034"
 
 	sFile = "AcroRead.msi"
 	sShortName = "ReaderDC"
@@ -75,10 +75,10 @@ Function ZTIProcess()
 	sInstallerTransform = oUtility.ScriptDir & "\Source\" & sTransform
 	
 	'// Build log path (incase not used in task sequence)
-	If oEnvironment.Item("_SMSTSLogPath") = "" Then 
-		sLogFolder = oEnv("TEMP") & "\AppLogs"
-	Else
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
 		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
 	End If
 	oUtility.VerifyPathExists sLogFolder
 	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
@@ -194,25 +194,36 @@ Function ZTIProcess()
 		sRegCmd = sRegCmd & " /s """ & oUtility.ScriptDir & "\Configs\lockdown_" & sShortName & ".reg"""
 		oUtility.RunWithConsoleLogging sRegCmd
 		
-		oShell.RegWrite "HKCU\SOFTWARE\Adobe\Acrobat Reader\DC\AdobeViewer\EULA", 1, "REG_DWORD"
-		oShell.RegWrite "HKCU\SOFTWARE\Adobe\Acrobat Reader\DC\Security\cDigSig\cEUTLDownload\bLoadSettingsFromURL", 1, "REG_DWORD"
-		oShell.RegWrite "HKCU\SOFTWARE\Adobe\Acrobat Reader\DC\Security\cDigSig\cAdobeDownload\bLoadSettingsFromURL", 1, "REG_DWORD"
-		oShell.RegWrite "HKCU\SOFTWARE\Adobe\Acrobat Reader\DC\AVGeneral\bFIPSMode", 1, "REG_DWORD"
-		
-		iRetVal = oUtility.RunWithHeartbeat("reg load ""HKU\Temp"" """ & oEnv("SystemDrive") & "\Users\Default\NTUSER.DAT""")
-		
 		'On Error Resume Next
+		Const HKEY_CURRENT_USERS = &H80000001
 		Const HKU_USERS = &H80000003
 		Dim objRegistry,strKeyPath
 		Set objRegistry = GetObject("winmgmts:\\.\root\default:StdRegProv")
-		strKeyPath = "Temp\SOFTWARE\Adobe\Acrobat Reader\DC\AdobeViewer"
-
-		objRegistry.CreateKey HKU_USERS, strKeyPath
-		oShell.RegWrite "HKEY_USERS\Temp\SOFTWARE\Adobe\Acrobat Reader\DC\AdobeViewer\EULA", 1, "REG_DWORD"
-		oShell.RegWrite "HKEY_USERS\Temp\SOFTWARE\Adobe\Acrobat Reader\DC\Security\cDigSig\cEUTLDownload\bLoadSettingsFromURL", 1, "REG_DWORD"
-		oShell.RegWrite "HKEY_USERS\Temp\SOFTWARE\Adobe\Acrobat Reader\DC\Security\cDigSig\cAdobeDownload\bLoadSettingsFromURL", 1, "REG_DWORD"
-		oShell.RegWrite "HKEY_USERS\Temp\SOFTWARE\Adobe\Acrobat Reader\DC\AVGeneral\bFIPSMode", 1, "REG_DWORD"
+		strKeyPath = "SOFTWARE\Adobe\Acrobat Reader\DC"
 		
+		objRegistry.CreateKey HKEY_CURRENT_USERS, (strKeyPath & "\AdobeViewer")
+		oShell.RegWrite "HKCU\" & strKeyPath & "\AdobeViewer\EULA", 1, "REG_DWORD"
+		objRegistry.CreateKey HKEY_CURRENT_USERS, (strKeyPath & "\Security\cDigSig\cEUTLDownload")
+		oShell.RegWrite "HKCU\" & strKeyPath & "\Security\cDigSig\cEUTLDownload\bLoadSettingsFromURL", 0, "REG_DWORD"
+		objRegistry.CreateKey HKEY_CURRENT_USERS, (strKeyPath & "\Security\cDigSig\cAdobeDownload")
+		oShell.RegWrite "HKCU\" & strKeyPath & "\Security\cDigSig\cAdobeDownload\bLoadSettingsFromURL", 0, "REG_DWORD"
+		objRegistry.CreateKey HKEY_CURRENT_USERS, (strKeyPath & "\TrustManager")
+		oShell.RegWrite "HKCU\" & strKeyPath & "\TrustManager\bTrustOSTrustedSites", 1, "REG_DWORD"
+		'objRegistry.CreateKey HKEY_CURRENT_USERS, (strKeyPath & "\AVGeneral")
+		'oShell.RegWrite "HKCU\" & strKeyPath & "\AVGeneral\bFIPSMode", 1, "REG_DWORD"
+
+		'Load default profile
+		iRetVal = oUtility.RunWithHeartbeat("reg load ""HKU\Temp"" """ & oEnv("SystemDrive") & "\Users\Default\NTUSER.DAT""")
+		objRegistry.CreateKey HKU_USERS, ("Temp\" & strKeyPath & "\AdobeViewer")
+		oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath & "\AdobeViewer\EULA", 1, "REG_DWORD"
+		objRegistry.CreateKey HKU_USERS, ("Temp\" & strKeyPath & "\Security\cDigSig\cEUTLDownload")
+		oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath & "\Security\cDigSig\cEUTLDownload\bLoadSettingsFromURL", 0, "REG_DWORD"
+		objRegistry.CreateKey HKU_USERS, ("Temp\" & strKeyPath & "\Security\cDigSig\cAdobeDownload")
+		oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath & "\Security\cDigSig\cAdobeDownload\bLoadSettingsFromURL", 0, "REG_DWORD"
+		objRegistry.CreateKey HKU_USERS, ("Temp\" & strKeyPath & "\TrustManager")
+		oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath & "\TrustManager\bTrustOSTrustedSites", 1, "REG_DWORD"
+		objRegistry.CreateKey HKU_USERS, ("Temp\" & strKeyPath & "\AVGeneral")
+		'oShell.RegWrite "HKEY_USERS\Temp\" & strKeyPath & "\AVGeneral\bFIPSMode", 1, "REG_DWORD"
 		oShell.Run "reg unload HKU\Temp", 0, true
 		
 		oLogging.CreateEntry "Finished " & sInstallName & " installation", LogTypeInfo
@@ -286,3 +297,11 @@ End Function
 
 </script>
 </job>
+
+
+
+
+
+
+
+

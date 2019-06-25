@@ -1,0 +1,112 @@
+<job id="Install-FilterPack">
+<script language="VBScript" src="..\..\scripts\ZTIUtility.vbs"/>
+<script language="VBScript"> 
+
+' //----------------------------------------------------------------------------
+' //
+' // Solution: Richard's Deployment Script
+' // File: Install-FilterPack.wsf
+' //
+' // Purpose: This will install FilterPack
+' //
+' // Author: Richard Tracy
+' //
+' // Usage: cscript Install-FilterPack.wsf [/debug:true]
+' //
+' //----------------------------------------------------------------------------
+
+'//----------------------------------------------------------------------------
+'// Global constant and variable declarations
+'//---------------------------------------------------------------------------- 
+Option Explicit 
+
+Dim iRetVal
+
+'//----------------------------------------------------------------------------
+'// Main routine
+'//---------------------------------------------------------------------------- 
+'On Error Resume Next
+iRetVal = ZTIProcess
+ProcessResults iRetVal
+On Error Goto 0
+
+'//---------------------------------------------------------------------------
+'// Function: ZTIProcess()
+'//---------------------------------------------------------------------------
+Function ZTIProcess() 
+
+	Dim sVersion,sFile,sArch
+	Dim sInstallName, sInstallerPath
+	Dim sProfile,bLoadHive
+	Dim sLogFolder,sLogName,sLogPath
+	Dim sLicensePath
+	
+	'// Apply Architecture arguments:
+	'If no argument provided check for MDT/SCCM variable
+	'If no variable or argument is provided, defualt to x86
+	If oUtility.Arguments.Exists("arch") Then
+		sArch = LCase(oUtility.Arguments("arch"))
+	ElseIf oEnvironment.Exists("Architecture") Then
+		sArch = LCase(oEnvironment.Item("Architecture"))
+	Else
+		sArch = "x86"
+	End If
+	
+	'// Variables: 
+	'// Change if needed
+	sVersion = "1.2"
+
+	
+	If sArch = "x64" Then
+		sFile = "FilterPack64bit.exe"
+	Else
+		sFile = "FilterPack32bit.exe"
+	End If
+	
+	sInstallName = "FilterPack"
+	
+	sInstallerPath = oUtility.ScriptDir & "\Source\" & sVersion  & "\" & sFile
+
+	'// Build log path (incase not used in task sequence)
+	If oEnvironment.Exists("_SMSTSLogPath") Then 
+		sLogFolder = oEnvironment.Item("_SMSTSLogPath") & "\AppLogs"
+	Else
+		sLogFolder = oEnv("TEMP") & "\AppLogs"
+	End If
+	oUtility.VerifyPathExists sLogFolder
+	sLogName = Replace(sInstallName & "_" & sVersion & "_" & sArch & ".log"," ","")
+	sLogPath = sLogFolder & "\" & sLogName
+	
+	'// Start the process
+	oLogging.CreateEntry "Starting " & sInstallName & " (" & sVersion & ") " & sArch & " installation", LogTypeInfo	
+	
+	If not oFSO.FileExists(sInstallerPath) then
+		oLogging.CreateEntry sInstallerPath & " was not found, unable to install " & sInstallName & " (" & sVersion & ")", LogTypeError
+		ZTIProcess = Failure
+		Exit Function
+	End if
+
+	'// Disable Zone Checks
+	oEnv("SEE_MASK_NOZONECHECKS") = 1 
+	
+	iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & sInstallerPath & """ /quiet /norestart")
+	
+	if (iRetVal = 0) or (iRetVal = 3010) then
+		ZTIProcess = Success
+		If sArch = "x86" Then
+			iRetVal = oUtility.RunWithHeartbeat("""" & oUtility.ScriptDir & "\Prereqs\ifilter60\Setup.exe"" /s -f1""" & oUtility.ScriptDir & "\ifilter60\setup.iss""")
+		End If
+		iRetVal = oUtility.RunWithHeartbeat("msiexec /i """ & oUtility.ScriptDir & "\Prereqs\PDFFilter64Setup.msi"" /qn /norestart /l*v """ & Replace(sLogPath,sLogName,"FilterPack_PDFFilter64Setup.log") & """")
+		
+	Else 
+		ZTIProcess = Failure
+		oLogging.CreateEntry sInstallName & " installation failed with exit code = " & iRetVal, LogTypeError
+	End If
+
+	'// Enable Zone Checks
+	oEnv.Remove("SEE_MASK_NOZONECHECKS")	
+
+End Function 
+</script>
+</job>
+
